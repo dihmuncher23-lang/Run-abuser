@@ -1,0 +1,159 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Event = ReplicatedStorage:WaitForChild("rob")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "RobAbilityGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+-- Create Main Frame (Drag container)
+local frame = Instance.new("Frame")
+frame.Name = "DragFrame"
+frame.Size = UDim2.new(0, 160, 0, 90)
+frame.Position = UDim2.new(0.5, -80, 0.8, -45)
+frame.BackgroundTransparency = 1
+frame.Parent = screenGui
+
+-- Create Button (Named ROB) with Neon Theme
+local button = Instance.new("TextButton")
+button.Name = "ROBButton"
+button.Size = UDim2.new(0, 160, 0, 50)
+button.Position = UDim2.new(0, 0, 0, 0)
+button.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+button.TextColor3 = Color3.fromRGB(0, 255, 255)
+button.TextSize = 18
+button.Font = Enum.Font.GothamBold
+button.Text = "ROB"
+button.Parent = frame
+
+local uiCorner = Instance.new("UICorner")
+uiCorner.CornerRadius = UDim.new(0, 8)
+uiCorner.Parent = button
+
+-- Neon Glow Stroke for Main Button
+local uiStroke = Instance.new("UIStroke")
+uiStroke.Color = Color3.fromRGB(0, 255, 255)
+uiStroke.Thickness = 2
+uiStroke.Transparency = 0.2
+uiStroke.Parent = button
+
+-- Create Lock/Unlock Toggle Button with Neon Accent
+local lockButton = Instance.new("TextButton")
+lockButton.Name = "LockButton"
+lockButton.Size = UDim2.new(0, 160, 0, 30)
+lockButton.Position = UDim2.new(0, 0, 0, 60)
+lockButton.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+lockButton.TextColor3 = Color3.fromRGB(0, 255, 128)
+lockButton.TextSize = 14
+lockButton.Font = Enum.Font.Gotham
+lockButton.Text = "Unlocked (Drag Me)"
+lockButton.Parent = frame
+
+local lockCorner = Instance.new("UICorner")
+lockCorner.CornerRadius = UDim.new(0, 6)
+lockCorner.Parent = lockButton
+
+local lockStroke = Instance.new("UIStroke")
+lockStroke.Color = Color3.fromRGB(0, 255, 128)
+lockStroke.Thickness = 1.5
+lockStroke.Transparency = 0.3
+lockStroke.Parent = lockButton
+
+-- State & Smooth Dragging Logic
+local isReady = true
+local isLocked = false
+local dragging = false
+local dragStart, startPos
+
+lockButton.MouseButton1Click:Connect(function()
+    isLocked = not isLocked
+    if isLocked then
+        lockButton.Text = "Locked"
+        lockButton.TextColor3 = Color3.fromRGB(255, 50, 50)
+        lockStroke.Color = Color3.fromRGB(255, 50, 50)
+        lockButton.BackgroundColor3 = Color3.fromRGB(40, 15, 15)
+    else
+        lockButton.Text = "Unlocked (Drag Me)"
+        lockButton.TextColor3 = Color3.fromRGB(0, 255, 128)
+        lockStroke.Color = Color3.fromRGB(0, 255, 128)
+        lockButton.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+    end
+end)
+
+frame.InputBegan:Connect(function(input)
+    if isLocked then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = frame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if not isLocked and dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(
+            startPos.X.Scale, 
+            startPos.X.Offset + delta.X, 
+            startPos.Y.Scale, 
+            startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+-- Button click event handling ROB (Fires true once, no remote fire after active)
+button.MouseButton1Click:Connect(function()
+    if not isReady then return end
+    isReady = false
+    
+    -- Phase 1: Active (13 seconds total: 10 + 3 extra) - Fires true ONLY at the start
+    Event:FireServer(true)
+    
+    local activeTime = 13
+    local proximityDistance = 3.5
+    
+    while activeTime > 0 do
+        button.Text = "Active: " .. tostring(activeTime) .. "s"
+        
+        local character = player.Character
+        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+        if rootPart then
+            for _, otherPlayer in ipairs(Players:GetPlayers()) do
+                if otherPlayer ~= player then
+                    local otherChar = otherPlayer.Character
+                    local otherRoot = otherChar and otherChar:FindFirstChild("HumanoidRootPart")
+                    if otherRoot then
+                        local distance = (rootPart.Position - otherRoot.Position).Magnitude
+                        if distance <= proximityDistance then
+                            print("Close to player (" .. math.floor(distance * 10) / 10 .. " studs): " .. otherPlayer.Name)
+                        end
+                    end
+                end
+            end
+        end
+        
+        task.wait(1)
+        activeTime = activeTime - 1
+    end
+    
+    -- Phase 2: Cooldown (10 seconds) - No remote fired here anymore
+    for i = 10, 1, -1 do
+        button.Text = "Cooldown: " .. tostring(i) .. "s"
+        task.wait(1)
+    end
+    
+    button.Text = "ROB"
+    isReady = true
+end)
