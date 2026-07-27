@@ -1,0 +1,130 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Event = ReplicatedStorage:WaitForChild("RunMasteryAbility")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "MasteryAbilityGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+-- Create Main Frame (Drag container)
+local frame = Instance.new("Frame")
+frame.Name = "DragFrame"
+frame.Size = UDim2.new(0, 160, 0, 90)
+frame.Position = UDim2.new(0.5, -80, 0.8, -45)
+frame.BackgroundTransparency = 1
+frame.Parent = screenGui
+
+-- Create Button
+local button = Instance.new("TextButton")
+button.Name = "AbilityButton"
+button.Size = UDim2.new(0, 160, 0, 50)
+button.Position = UDim2.new(0, 0, 0, 0)
+button.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+button.TextColor3 = Color3.fromRGB(255, 255, 255)
+button.TextSize = 18
+button.Font = Enum.Font.GothamBold
+button.Text = "Run Ability"
+button.Parent = frame
+
+local uiCorner = Instance.new("UICorner")
+uiCorner.CornerRadius = UDim.new(0, 8)
+uiCorner.Parent = button
+
+-- Create Lock/Unlock Toggle Button
+local lockButton = Instance.new("TextButton")
+lockButton.Name = "LockButton"
+lockButton.Size = UDim2.new(0, 160, 0, 30)
+lockButton.Position = UDim2.new(0, 0, 0, 60)
+lockButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+lockButton.TextColor3 = Color3.fromRGB(200, 200, 200)
+lockButton.TextSize = 14
+lockButton.Font = Enum.Font.Gotham
+lockButton.Text = "Unlocked (Drag Me)"
+lockButton.Parent = frame
+
+local lockCorner = Instance.new("UICorner")
+lockCorner.CornerRadius = UDim.new(0, 6)
+lockCorner.Parent = lockButton
+
+-- Cooldown & Dragging Logic
+-- 3 second ability duration + 5 second cooldown starting after the ability finishes = 8 seconds total lockout
+local abilityDuration = 3
+local cooldownDuration = 5
+local isOnCooldown = false
+local isLocked = false
+local dragging = false
+local dragInput, dragStart, startPos
+
+lockButton.MouseButton1Click:Connect(function()
+    isLocked = not isLocked
+    if isLocked then
+        lockButton.Text = "Locked"
+        lockButton.BackgroundColor3 = Color3.fromRGB(100, 40, 40)
+    else
+        lockButton.Text = "Unlocked (Drag Me)"
+        lockButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    end
+end)
+
+frame.InputBegan:Connect(function(input)
+    if isLocked then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = frame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+frame.InputChanged:Connect(function(input)
+    if isLocked then return end
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if not isLocked and dragging and input == dragInput then
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(
+            startPos.X.Scale, 
+            startPos.X.Offset + delta.X, 
+            startPos.Y.Scale, 
+            startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+-- Fire the remote and handle the staged timer
+button.MouseButton1Click:Connect(function()
+    if isOnCooldown then return end
+    isOnCooldown = true
+    
+    Event:FireServer()
+    
+    -- Phase 1: Ability is active (3 seconds)
+    for i = abilityDuration, 1, -1 do
+        button.Text = "Active: " .. tostring(i) .. "s"
+        task.wait(1)
+    end
+    
+    -- Phase 2: Cooldown starts after ability ends (5 seconds)
+    for i = cooldownDuration, 1, -1 do
+        button.Text = tostring(i) .. "s"
+        task.wait(1)
+    end
+    
+    button.Text = "Run Ability"
+    isOnCooldown = false
+end)
