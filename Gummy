@@ -1,0 +1,214 @@
+--[[
+	Script Name: Slap Battles GUI Ability Button (5.5s Cooldown)
+	Executor: delta
+	Made by Spamton G Spamton
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Remove existing GUI if it already exists
+if playerGui:FindFirstChild("SpamtonAbilityGui") then
+	playerGui.SpamtonAbilityGui:Destroy()
+end
+
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "SpamtonAbilityGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+-- Create Main Frame (Smaller container)
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 110, 0, 110)
+mainFrame.Position = UDim2.new(0.8, 0, 0.6, 0)
+mainFrame.BackgroundTransparency = 1
+mainFrame.Active = true
+mainFrame.Parent = screenGui
+
+-- Create the Ability Button (Scaled down)
+local abilityButton = Instance.new("TextButton")
+abilityButton.Name = "AbilityButton"
+abilityButton.Size = UDim2.new(0, 80, 0, 80)
+abilityButton.Position = UDim2.new(0.5, -40, 0.5, -40)
+abilityButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+abilityButton.BorderSizePixel = 0
+abilityButton.Text = "ABILITY"
+abilityButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+abilityButton.TextSize = 14
+abilityButton.Font = Enum.Font.GothamBold
+abilityButton.Parent = mainFrame
+
+local uiCorner = Instance.new("UICorner")
+uiCorner.CornerRadius = UDim.new(1, 0)
+uiCorner.Parent = abilityButton
+
+-- Outer Neon Glow Stroke (RGB Effect Base)
+local uiStroke = Instance.new("UIStroke")
+uiStroke.Name = "NeonStroke"
+uiStroke.Thickness = 4
+uiStroke.Transparency = 0
+uiStroke.Parent = abilityButton
+
+-- Cooldown Overlay Frame
+local cooldownOverlay = Instance.new("Frame")
+cooldownOverlay.Name = "CooldownOverlay"
+cooldownOverlay.Size = UDim2.new(1, 0, 1, 0)
+cooldownOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+cooldownOverlay.BackgroundTransparency = 0.5
+cooldownOverlay.Visible = false
+cooldownOverlay.Parent = abilityButton
+
+local overlayCorner = Instance.new("UICorner")
+overlayCorner.CornerRadius = UDim.new(1, 0)
+overlayCorner.Parent = cooldownOverlay
+
+-- Cooldown Text Label
+local cooldownText = Instance.new("TextLabel")
+cooldownText.Name = "CooldownText"
+cooldownText.Size = UDim2.new(1, 0, 1, 0)
+cooldownText.BackgroundTransparency = 1
+cooldownText.TextColor3 = Color3.fromRGB(255, 255, 255)
+cooldownText.TextSize = 20
+cooldownText.Font = Enum.Font.GothamBold
+cooldownText.Text = ""
+cooldownText.Visible = false
+cooldownText.Parent = abilityButton
+
+-- Lock/Unlock Toggle Button (Mini)
+local lockButton = Instance.new("TextButton")
+lockButton.Name = "LockButton"
+lockButton.Size = UDim2.new(0, 24, 0, 24)
+lockButton.Position = UDim2.new(1, -26, 0, 0)
+lockButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+lockButton.TextColor3 = Color3.fromRGB(0, 255, 0)
+lockButton.TextSize = 10
+lockButton.Font = Enum.Font.GothamBold
+lockButton.Text = "UNL"
+lockButton.Parent = mainFrame
+
+local lockCorner = Instance.new("UICorner")
+lockCorner.CornerRadius = UDim.new(0.5, 0)
+lockCorner.Parent = lockButton
+
+local lockStroke = Instance.new("UIStroke")
+lockStroke.Thickness = 1.5
+lockStroke.Color = Color3.fromRGB(0, 255, 0)
+lockStroke.Parent = lockButton
+
+-- Spamton Credit Label (Mini)
+local creditLabel = Instance.new("TextLabel")
+creditLabel.Name = "CreditLabel"
+creditLabel.Size = UDim2.new(0, 110, 0, 16)
+creditLabel.Position = UDim2.new(0.5, -55, 1, -16)
+creditLabel.BackgroundTransparency = 1
+creditLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+creditLabel.TextSize = 8
+creditLabel.Font = Enum.Font.GothamBold
+creditLabel.Text = "made by spamton g spamton"
+creditLabel.Parent = mainFrame
+
+local creditStroke = Instance.new("UIStroke")
+creditStroke.Thickness = 1
+creditStroke.Color = Color3.fromRGB(0, 0, 0)
+creditStroke.Parent = creditLabel
+
+-- RGB Color Loop (Neon Effect)
+RunService.RenderStepped:Connect(function()
+	local hue = (tick() % 5) / 5
+	local rgbColor = Color3.fromHSV(hue, 1, 1)
+	uiStroke.Color = rgbColor
+end)
+
+-- Improved Global Dragging Functionality
+local isLocked = false
+local dragging = false
+local dragStart, startPos
+
+lockButton.MouseButton1Click:Connect(function()
+	isLocked = not isLocked
+	if isLocked then
+		lockButton.Text = "LOC"
+		lockButton.TextColor3 = Color3.fromRGB(255, 50, 50)
+		lockStroke.Color = Color3.fromRGB(255, 50, 50)
+	else
+		lockButton.Text = "UNL"
+		lockButton.TextColor3 = Color3.fromRGB(0, 255, 0)
+		lockStroke.Color = Color3.fromRGB(0, 255, 0)
+	end
+end)
+
+mainFrame.InputBegan:Connect(function(input)
+	if isLocked then return end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = input.Position
+		startPos = mainFrame.AbsolutePosition
+		
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if dragging and not isLocked and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		local delta = input.Position - dragStart
+		mainFrame.Position = UDim2.new(
+			0, startPos.X + delta.X,
+			0, startPos.Y + delta.Y
+		)
+	end
+end)
+
+-- Ability & Cooldown Logic (5.5 seconds)
+local coolDownTime = 5.5
+local isOnCooldown = false
+
+abilityButton.MouseButton1Click:Connect(function()
+	if dragging then return end
+	if isOnCooldown then return end
+	isOnCooldown = true
+	
+	-- Fire the Remote Event
+	local success, err = pcall(function()
+		local event = ReplicatedStorage:FindFirstChild("GeneralAbility")
+		if event then
+			event:FireServer()
+		end
+	end)
+	
+	if not success then
+		warn("Failed to fire GeneralAbility event: " .. tostring(err))
+	end
+	
+	-- Activate Cooldown Visuals
+	cooldownOverlay.Visible = true
+	cooldownText.Visible = true
+	
+	local startTime = tick()
+	local connection
+	
+	connection = RunService.RenderStepped:Connect(function()
+		local elapsed = tick() - startTime
+		local timeLeft = coolDownTime - elapsed
+		
+		if timeLeft <= 0 then
+			cooldownOverlay.Visible = false
+			cooldownText.Visible = false
+			cooldownText.Text = ""
+			isOnCooldown = false
+			connection:Disconnect()
+		else
+			cooldownText.Text = string.format("%.1f", timeLeft)
+		end
+	end)
+end)
