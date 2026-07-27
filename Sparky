@@ -1,0 +1,55 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local SparkyEvent = ReplicatedStorage:WaitForChild("Sparky")
+
+local activeConnection = nil
+
+-- Function to activate the instant-turning effect for a set duration
+local function triggerSnapEffect(duration)
+    -- Disconnect any existing active effect so they don't overlap
+    if activeConnection then
+        activeConnection:Disconnect()
+        activeConnection = nil
+    end
+
+    local startTime = tick()
+    
+    activeConnection = RunService.RenderStepped:Connect(function()
+        if tick() - startTime > duration then
+            activeConnection:Disconnect()
+            activeConnection = nil
+            return
+        end
+        
+        local char = LocalPlayer.Character
+        if not char then return end
+        
+        local rootPart = char:FindFirstChild("HumanoidRootPart")
+        local humanoid = char:FindFirstChild("Humanoid")
+        
+        if rootPart and humanoid and humanoid.Health > 0 then
+            local camCF = Camera.CFrame
+            local flatLook = Vector3.new(camCF.LookVector.X, 0, camCF.LookVector.Z)
+            
+            if flatLook.Magnitude > 0 then
+                rootPart.CFrame = CFrame.new(rootPart.Position) * CFrame.Angles(0, math.atan2(-flatLook.X, -flatLook.Z), 0)
+            end
+        end
+    end)
+end
+
+-- Hook into when the RemoteEvent is fired (listens for when the server or client triggers FireServer/OnClientEvent, or you can wrap your own function)
+-- Since FireServer is sent TO the server, we hook onto whenever YOU call FireServer on the Sparky event:
+local oldFireServer
+oldFireServer = hookmetamethod(game, "__namecall", function(self, ...)
+    local method = getnamecallmethod()
+    if self == SparkyEvent and method == "FireServer" then
+        -- Trigger the instant camera-facing snap for 20 seconds whenever the remote is fired
+        triggerSnapEffect(20)
+    end
+    return oldFireServer(self, ...)
+end)
