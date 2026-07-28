@@ -1,0 +1,38 @@
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+
+-- Configuration
+-- 0.96 provides a long, heavy drift before settling to a stop.
+local FRICTION = 0.96 
+local STOP_THRESHOLD = 0.1 -- Very low so it doesn't stop until almost perfectly still
+
+RunService.RenderStepped:Connect(function()
+    local character = player.Character
+    if not character then return end
+    
+    local root = character:FindFirstChild("HumanoidRootPart")
+    local hum = character:FindFirstChild("Humanoid")
+    
+    -- Only apply friction if the player is NOT actively trying to move
+    if root and hum and hum.MoveDirection.Magnitude == 0 then
+        local vel = root.AssemblyLinearVelocity
+        
+        -- Check if we have significant horizontal movement
+        if math.abs(vel.X) > 0.1 or math.abs(vel.Z) > 0.1 then
+            -- Apply heavy friction for a long slide
+            local newX = vel.X * FRICTION
+            local newZ = vel.Z * FRICTION
+            
+            -- Final snap to zero to prevent "micro-drifting"
+            if math.abs(newX) < STOP_THRESHOLD then newX = 0 end
+            if math.abs(newZ) < STOP_THRESHOLD then newZ = 0 end
+            
+            root.AssemblyLinearVelocity = Vector3.new(newX, vel.Y, newZ)
+        end
+    end
+end)
+
+print("MR Smooth-Stop: Maximum slide friction (0.96) applied.")
