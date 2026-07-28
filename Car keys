@@ -1,0 +1,33 @@
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+
+RunService.RenderStepped:Connect(function()
+    local character = player.Character
+    if not character then return end
+    
+    local humanoid = character:FindFirstChild("Humanoid")
+    if humanoid then
+        local seatPart = humanoid.SeatPart
+        if seatPart then
+            local vehicleModel = seatPart.Parent
+            local corePart = vehicleModel:FindFirstChild("PrimaryPart") 
+                or vehicleModel:FindFirstChild("HumanoidRootPart") 
+                or vehicleModel:FindFirstChild("Chassis") 
+                or seatPart
+            
+            if corePart then
+                -- Check if you are NOT pressing any movement keys
+                if humanoid.MoveDirection.Magnitude == 0 then
+                    local currentVel = corePart.AssemblyLinearVelocity
+                    -- Kill horizontal movement completely right away, keep vertical physics intact
+                    corePart.AssemblyLinearVelocity = Vector3.new(0, currentVel.Y, 0)
+                end
+            end
+        end
+    end
+end)
+
+print("Car Keys Instant-Stop Active: Zero delay on release locked in.")
