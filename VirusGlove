@@ -1,0 +1,158 @@
+-- Services
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Cleanup previous instance
+if playerGui:FindFirstChild("AbilityButtonGui") then
+    playerGui.AbilityButtonGui:Destroy()
+end
+
+-- Main ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AbilityButtonGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+-- Main Container (Draggable Frame)
+local container = Instance.new("Frame")
+container.Name = "Container"
+container.Size = UDim2.new(0, 150, 0, 70)
+container.Position = UDim2.new(0.5, -75, 0.75, -35)
+container.BackgroundTransparency = 1
+container.Active = true -- REQUIRED so mobile touches and mouse inputs register on transparent frames
+container.Parent = screenGui
+
+-- Main Ability Button
+local button = Instance.new("TextButton")
+button.Name = "AbilityButton"
+button.Size = UDim2.new(1, 0, 1, 0)
+button.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+button.BorderSizePixel = 0
+button.Text = "ABILITY"
+button.TextColor3 = Color3.fromRGB(255, 255, 255)
+button.TextScaled = true
+button.Font = Enum.Font.GothamBold
+button.Active = false -- Prevents button from stealing touch input from the container
+button.Parent = container
+
+local uiCorner = Instance.new("UICorner")
+uiCorner.CornerRadius = UDim.new(0, 16)
+uiCorner.Parent = button
+
+local uiStroke = Instance.new("UIStroke")
+uiStroke.Thickness = 3
+uiStroke.Parent = button
+
+-- Lock Button
+local lockButton = Instance.new("TextButton")
+lockButton.Name = "LockButton"
+lockButton.Size = UDim2.new(0, 26, 0, 26)
+lockButton.Position = UDim2.new(1, -30, 0, 4)
+lockButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+lockButton.Text = "🔓"
+lockButton.TextSize = 14
+lockButton.ZIndex = 3
+lockButton.Parent = container
+
+local lockCorner = Instance.new("UICorner")
+lockCorner.CornerRadius = UDim.new(1, 0)
+lockCorner.Parent = lockButton
+
+-- RGB Color Loop
+local hue = 0
+local connection
+connection = RunService.RenderStepped:Connect(function(dt)
+    if not container or not container.Parent then
+        connection:Disconnect()
+        return
+    end
+    
+    hue = (hue + dt * 0.2) % 1
+    local rgbColor = Color3.fromHSV(hue, 1, 1)
+    
+    uiStroke.Color = rgbColor
+    button.TextColor3 = rgbColor
+end)
+
+-- Robust Draggable Logic (Using Delta's native Input events)
+local isLocked = false
+local dragging = false
+local dragInput, dragStart, startPos
+
+lockButton.MouseButton1Click:Connect(function()
+    isLocked = not isLocked
+    if isLocked then
+        lockButton.Text = "🔒"
+        lockButton.BackgroundColor3 = Color3.fromRGB(80, 20, 20)
+    else
+        lockButton.Text = "🔓"
+        lockButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    end
+end)
+
+container.InputBegan:Connect(function(input)
+    if isLocked then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = container.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+container.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input == dragInput and not isLocked then
+        local delta = input.Position - dragStart
+        container.Position = UDim2.new(
+            startPos.X.Scale, 
+            startPos.X.Offset + delta.X, 
+            startPos.Y.Scale, 
+            startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+-- Cooldown and Fire Logic
+local canClick = true
+local cooldownTime = 3
+
+button.MouseButton1Click:Connect(function()
+    if not canClick then return end
+    canClick = false
+    
+    button.BackgroundTransparency = 0.4
+    
+    local success, err = pcall(function()
+        local event = ReplicatedStorage:FindFirstChild("GeneralAbility")
+        if event then
+            event:FireServer()
+        end
+    end)
+    
+    local timeLeft = cooldownTime
+    while timeLeft > 0 do
+        button.Text = string.format("%.1fs", timeLeft)
+        task.wait(0.1)
+        timeLeft = timeLeft - 0.1
+    end
+    
+    button.Text = "ABILITY"
+    button.BackgroundTransparency = 0
+    canClick = true
+end)
