@@ -1,1 +1,165 @@
+-- Ensure the script runs only on the client side
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Clean up any existing instances of the GUI to prevent duplicates
+if playerGui:FindFirstChild("OraAbilityGui") then
+	playerGui.OraAbilityGui:Destroy()
+end
+
+-- Create ScreenGui with a high DisplayOrder so it overlays all other game GUIs
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "OraAbilityGui"
+screenGui.ResetOnSpawn = false
+screenGui.DisplayOrder = 999999 -- Forces it on top of other UIs
+screenGui.IgnoreGuiInset = true
+screenGui.Parent = playerGui
+
+-- Create Main Frame (Draggable Container - smaller size)
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 80, 0, 80)
+mainFrame.Position = UDim2.new(0.1, 0, 0.1, 0)
+mainFrame.BackgroundTransparency = 1
+mainFrame.Parent = screenGui
+
+-- Create RGB / Purple & Gold Glowing Circle Background
+local bgCircle = Instance.new("Frame")
+bgCircle.Name = "BGCircle"
+bgCircle.Size = UDim2.new(1, 0, 1, 0)
+bgCircle.BackgroundColor3 = Color3.fromRGB(128, 0, 128)
+bgCircle.Parent = mainFrame
+
+local bgCorner = Instance.new("UICorner")
+bgCorner.CornerRadius = UDim.new(1, 0)
+bgCorner.Parent = bgCircle
+
+-- Add a stylish gold stroke/border to the circle
+local bgStroke = Instance.new("UIStroke")
+bgStroke.Name = "GoldStroke"
+bgStroke.Thickness = 3
+bgStroke.Color = Color3.fromRGB(255, 215, 0)
+bgStroke.Parent = bgCircle
+
+-- Create ORA! Button (Smaller, Round)
+local oraButton = Instance.new("TextButton")
+oraButton.Name = "OraButton"
+oraButton.Size = UDim2.new(0, 64, 0, 64)
+oraButton.Position = UDim2.new(0.5, -32, 0.5, -32)
+oraButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+oraButton.Font = Enum.Font.GothamBlack
+oraButton.Text = "ORA!"
+oraButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+oraButton.TextSize = 13
+oraButton.AutoButtonColor = false
+oraButton.Parent = mainFrame
+
+local btnCorner = Instance.new("UICorner")
+btnCorner.CornerRadius = UDim.new(1, 0)
+btnCorner.Parent = oraButton
+
+local btnStroke = Instance.new("UIStroke")
+btnStroke.Thickness = 2
+btnStroke.Color = Color3.fromRGB(255, 215, 0)
+btnStroke.Parent = oraButton
+
+-- Create Compact Lock/Unlock Toggle Button
+local lockButton = Instance.new("TextButton")
+lockButton.Name = "LockButton"
+lockButton.Size = UDim2.new(0, 20, 0, 20)
+lockButton.Position = UDim2.new(1, -12, 0, -2)
+lockButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+lockButton.Font = Enum.Font.GothamBold
+lockButton.Text = "🔓"
+lockButton.TextSize = 10
+lockButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+lockButton.Parent = mainFrame
+
+local lockCorner = Instance.new("UICorner")
+lockCorner.CornerRadius = UDim.new(1, 0)
+lockButton.Parent = mainFrame
+
+-- Dynamic RGB / Purple & Gold Color Loop Animation
+local connection
+connection = RunService.RenderStepped:Connect(function()
+	if not screenGui.Parent then
+		connection:Disconnect()
+		return
+	end
+	
+	local tickTime = tick() * 1.5
+	local mixColor = Color3.fromRGB(
+		math.floor((math.sin(tickTime) * 0.5 + 0.5) * 120 + 135),
+		math.floor((math.cos(tickTime) * 0.5 + 0.5) * 80),
+		180
+	)
+	
+	bgCircle.BackgroundColor3 = mixColor
+end)
+
+-- Remote Event Activation
+oraButton.MouseButton1Click:Connect(function()
+	local success, err = pcall(function()
+		ReplicatedStorage.GeneralAbility:FireServer()
+	end)
+	
+	-- Button click visual feedback animation
+	TweenService:Create(oraButton, TweenInfo.new(0.08), {Size = UDim2.new(0, 56, 0, 56)}):Play()
+	task.wait(0.08)
+	TweenService:Create(oraButton, TweenInfo.new(0.08), {Size = UDim2.new(0, 64, 0, 64)}):Play()
+end)
+
+-- Draggable & Lockable Logic
+local isDragging = false
+local isLocked = false
+local dragInput, mousePos, framePos
+
+lockButton.MouseButton1Click:Connect(function()
+	isLocked = not isLocked
+	if isLocked then
+		lockButton.Text = "🔒"
+		lockButton.BackgroundColor3 = Color3.fromRGB(80, 20, 20)
+	else
+		lockButton.Text = "🔓"
+		lockButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	end
+end)
+
+mainFrame.InputBegan:Connect(function(input)
+	if isLocked then return end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		isDragging = true
+		mousePos = input.Position
+		framePos = mainFrame.Position
+		
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				isDragging = false
+			end
+		end)
+	end
+end)
+
+mainFrame.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		dragInput = input
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if input == dragInput and isDragging and not isLocked then
+		local delta = input.Position - mousePos
+		mainFrame.Position = UDim2.new(
+			framePos.X.Scale, 
+			framePos.X.Offset + delta.X, 
+			framePos.Y.Scale, 
+			framePos.Y.Offset + delta.Y
+		)
+	end
+end)
