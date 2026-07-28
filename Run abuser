@@ -1,59 +1,107 @@
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
 local Event = ReplicatedStorage:WaitForChild("RunMasteryAbility")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- Create ScreenGui
+-- Remove old GUI if it exists to prevent duplicates
+if playerGui:FindFirstChild("MasteryAbilityGui") then
+    playerGui.MasteryAbilityGui:Destroy()
+end
+
+-- Create ScreenGui with Max DisplayOrder so it overlays other UI elements (like chat, menus, etc.)
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "MasteryAbilityGui"
 screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.DisplayOrder = 999999
 screenGui.Parent = playerGui
 
 -- Create Main Frame (Drag container)
 local frame = Instance.new("Frame")
 frame.Name = "DragFrame"
-frame.Size = UDim2.new(0, 160, 0, 90)
-frame.Position = UDim2.new(0.5, -80, 0.8, -45)
+frame.Size = UDim2.new(0, 70, 0, 110)
+frame.Position = UDim2.new(0.8, -35, 0.7, -55)
 frame.BackgroundTransparency = 1
 frame.Parent = screenGui
 
--- Create Button
+-- Create Circular Main Button
 local button = Instance.new("TextButton")
 button.Name = "AbilityButton"
-button.Size = UDim2.new(0, 160, 0, 50)
-button.Position = UDim2.new(0, 0, 0, 0)
-button.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+button.Size = UDim2.new(0, 60, 0, 60)
+button.Position = UDim2.new(0.5, -30, 0, 0)
+button.BackgroundColor3 = Color3.fromRGB(35, 120, 235)
 button.TextColor3 = Color3.fromRGB(255, 255, 255)
-button.TextSize = 18
+button.TextSize = 24
 button.Font = Enum.Font.GothamBold
-button.Text = "Run Ability"
+button.Text = "" -- Text handled by inner labels for absolute clarity
+button.AutoButtonColor = false
 button.Parent = frame
 
-local uiCorner = Instance.new("UICorner")
-uiCorner.CornerRadius = UDim.new(0, 8)
-uiCorner.Parent = button
+local buttonCorner = Instance.new("UICorner")
+buttonCorner.CornerRadius = UDim.new(1, 0)
+buttonCorner.Parent = button
 
--- Create Lock/Unlock Toggle Button
+-- Bold high-contrast white outer ring stroke
+local buttonStroke = Instance.new("UIStroke")
+buttonStroke.Color = Color3.fromRGB(255, 255, 255)
+buttonStroke.Thickness = 3.5
+buttonStroke.Parent = button
+
+-- Rich gradient for clean modern look
+local buttonGradient = Instance.new("UIGradient")
+buttonGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 160, 255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 90, 200))
+})
+buttonGradient.Rotation = 90
+buttonGradient.Parent = button
+
+-- Primary text label (shows keybind "R" or countdown numbers)
+local textLabel = Instance.new("TextLabel")
+textLabel.Name = "TextLabel"
+textLabel.Size = UDim2.new(1, 0, 1, 0)
+textLabel.Position = UDim2.new(0, 0, 0, 0)
+textLabel.BackgroundTransparency = 1
+textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+textLabel.TextSize = 26
+textLabel.Font = Enum.Font.GothamBlack
+textLabel.Text = "R"
+textLabel.ZIndex = 3
+textLabel.Parent = button
+
+-- Drop shadow stroke behind the text for maximum contrast against any background color
+local textStroke = Instance.new("UIStroke")
+textStroke.Color = Color3.fromRGB(0, 0, 0)
+textStroke.Thickness = 2
+textStroke.Parent = textLabel
+
+-- Create Compact Lock/Unlock Toggle Button below it
 local lockButton = Instance.new("TextButton")
 lockButton.Name = "LockButton"
-lockButton.Size = UDim2.new(0, 160, 0, 30)
-lockButton.Position = UDim2.new(0, 0, 0, 60)
-lockButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-lockButton.TextColor3 = Color3.fromRGB(200, 200, 200)
-lockButton.TextSize = 14
-lockButton.Font = Enum.Font.Gotham
-lockButton.Text = "Unlocked (Drag Me)"
+lockButton.Size = UDim2.new(0, 70, 0, 24)
+lockButton.Position = UDim2.new(0, 0, 0, 70)
+lockButton.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+lockButton.TextColor3 = Color3.fromRGB(160, 160, 175)
+lockButton.TextSize = 10
+lockButton.Font = Enum.Font.GothamMedium
+lockButton.Text = "🔓 Unlock"
+lockButton.AutoButtonColor = false
 lockButton.Parent = frame
 
 local lockCorner = Instance.new("UICorner")
 lockCorner.CornerRadius = UDim.new(0, 6)
 lockCorner.Parent = lockButton
 
+local lockStroke = Instance.new("UIStroke")
+lockStroke.Color = Color3.fromRGB(50, 50, 60)
+lockStroke.Thickness = 1
+lockStroke.Parent = lockButton
+
 -- Cooldown & Dragging Logic
--- 3 second ability duration + 5 second cooldown starting after the ability finishes = 8 seconds total lockout
 local abilityDuration = 3
 local cooldownDuration = 5
 local isOnCooldown = false
@@ -61,17 +109,60 @@ local isLocked = false
 local dragging = false
 local dragInput, dragStart, startPos
 
+-- Function to execute the ability
+local function runAbility()
+    if isOnCooldown then return end
+    isOnCooldown = true
+    
+    Event:FireServer()
+    
+    -- Phase 1: Ability is active (3 seconds) - Green state
+    button.BackgroundColor3 = Color3.fromRGB(30, 160, 70)
+    buttonGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(60, 210, 100)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 120, 50))
+    })
+    for i = abilityDuration, 1, -1 do
+        textLabel.Text = tostring(i)
+        task.wait(1)
+    end
+    
+    -- Phase 2: Cooldown starts after ability ends (5 seconds) - Orange state
+    button.BackgroundColor3 = Color3.fromRGB(200, 90, 20)
+    buttonGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(240, 130, 40)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(160, 60, 10))
+    })
+    for i = cooldownDuration, 1, -1 do
+        textLabel.Text = tostring(i)
+        task.wait(1)
+    end
+    
+    -- Reset back to default blue state
+    textLabel.Text = "R"
+    button.BackgroundColor3 = Color3.fromRGB(35, 120, 235)
+    buttonGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 160, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 90, 200))
+    })
+    isOnCooldown = false
+end
+
+-- Lock Toggle
 lockButton.MouseButton1Click:Connect(function()
     isLocked = not isLocked
     if isLocked then
-        lockButton.Text = "Locked"
-        lockButton.BackgroundColor3 = Color3.fromRGB(100, 40, 40)
+        lockButton.Text = "🔒 Lock"
+        lockButton.TextColor3 = Color3.fromRGB(235, 90, 90)
+        lockStroke.Color = Color3.fromRGB(120, 40, 40)
     else
-        lockButton.Text = "Unlocked (Drag Me)"
-        lockButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        lockButton.Text = "🔓 Unlock"
+        lockButton.TextColor3 = Color3.fromRGB(160, 160, 175)
+        lockStroke.Color = Color3.fromRGB(50, 50, 60)
     end
 end)
 
+-- Dragging Logic
 frame.InputBegan:Connect(function(input)
     if isLocked then return end
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -106,25 +197,13 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Fire the remote and handle the staged timer
-button.MouseButton1Click:Connect(function()
-    if isOnCooldown then return end
-    isOnCooldown = true
-    
-    Event:FireServer()
-    
-    -- Phase 1: Ability is active (3 seconds)
-    for i = abilityDuration, 1, -1 do
-        button.Text = "Active: " .. tostring(i) .. "s"
-        task.wait(1)
+-- Click trigger
+button.MouseButton1Click:Connect(runAbility)
+
+-- Keyboard keybind trigger (Press R)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.R then
+        runAbility()
     end
-    
-    -- Phase 2: Cooldown starts after ability ends (5 seconds)
-    for i = cooldownDuration, 1, -1 do
-        button.Text = tostring(i) .. "s"
-        task.wait(1)
-    end
-    
-    button.Text = "Run Ability"
-    isOnCooldown = false
 end)
