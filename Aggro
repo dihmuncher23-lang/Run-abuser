@@ -1,0 +1,167 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local animator = humanoid:WaitForChild("Animator")
+
+-- Save your default walkspeed so we can restore it after
+local defaultWalkSpeed = humanoid.WalkSpeed
+
+-- Load the animation
+local animObject = Instance.new("Animation")
+animObject.AnimationId = "rbxassetid://94305630911620"
+local animTrack = animator:LoadAnimation(animObject)
+
+-- Create the GUI elements
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AggroButtonGui"
+screenGui.Parent = CoreGui
+
+local button = Instance.new("TextButton")
+button.Name = "AggroButton"
+button.Size = UDim2.new(0, 140, 0, 50)
+button.Position = UDim2.new(0.5, -70, 0.75, -25)
+button.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+button.TextColor3 = Color3.fromRGB(0, 0, 0)
+button.TextSize = 20
+button.Font = Enum.Font.SourceSansBold
+button.Text = "AGGRO"
+button.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = button
+
+-- Create Lock Toggle Button
+local lockButton = Instance.new("TextButton")
+lockButton.Name = "LockButton"
+lockButton.Size = UDim2.new(0, 30, 0, 30)
+lockButton.Position = UDim2.new(1, -35, 0, 5)
+lockButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+lockButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+lockButton.TextSize = 14
+lockButton.Font = Enum.Font.SourceSansBold
+lockButton.Text = "🔓"
+lockButton.Parent = button
+
+local lockCorner = Instance.new("UICorner")
+lockCorner.CornerRadius = UDim.new(0, 6)
+lockCorner.Parent = lockButton
+
+-- Function to check if the player has the Aggro glove/tool
+local function hasAggroGlove()
+    local currentCharacter = player.Character
+    local backpack = player:FindFirstChildOfClass("Backpack")
+    
+    if currentCharacter and currentCharacter:FindFirstChild("Aggro") then
+        return true
+    end
+    
+    if backpack and backpack:FindFirstChild("Aggro") then
+        return true
+    end
+    
+    return false
+end
+
+-- Dragging and Locking Logic
+local locked = false
+local dragging = false
+local dragInput, dragStart, startPos
+
+lockButton.MouseButton1Click:Connect(function()
+    locked = not locked
+    if locked then
+        lockButton.Text = "🔒"
+        lockButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    else
+        lockButton.Text = "🔓"
+        lockButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    end
+end)
+
+button.InputBegan:Connect(function(input)
+    if locked then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = button.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+button.InputChanged:Connect(function(input)
+    if locked then return end
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if not locked and dragging and input == dragInput then
+        local delta = input.Position - dragStart
+        button.Position = UDim2.new(
+            startPos.X.Scale, 
+            startPos.X.Offset + delta.X, 
+            startPos.Y.Scale, 
+            startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+-- Cooldown handling & Ability Execution
+local isCooldown = false
+local cooldownTime = 6
+
+button.MouseButton1Click:Connect(function()
+    -- Ensure dragging didn't trigger it, not on cooldown, and the Aggro tool is present
+    if isCooldown or dragging then return end
+    
+    if not hasAggroGlove() then
+        button.Text = "NO AGGRO"
+        task.wait(1.5)
+        button.Text = "AGGRO"
+        return
+    end
+
+    isCooldown = true
+
+    -- Update references in case character respawned
+    local currentHumanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+    if currentHumanoid then
+        currentHumanoid.WalkSpeed = 3
+    end
+    
+    animTrack:Play()
+
+    -- Fire the server ability remote
+    ReplicatedStorage.GeneralAbility:FireServer()
+
+    -- Restore original walkspeed automatically when the animation stops
+    task.spawn(function()
+        animTrack.Stopped:Wait()
+        local activeHumanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+        if activeHumanoid then
+            activeHumanoid.WalkSpeed = defaultWalkSpeed
+        end
+    end)
+
+    -- Cooldown visual timer loop
+    for i = cooldownTime, 1, -1 do
+        button.Text = tostring(i)
+        task.wait(1)
+    end
+
+    -- Reset button state
+    button.Text = "AGGRO"
+    isCooldown = false
+end)
