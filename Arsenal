@@ -1,0 +1,1812 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local Ambient = Lighting.Ambient
+local OutdoorAmbient = Lighting.OutdoorAmbient
+local ClockTime = Lighting.ClockTime
+
+local Settings = {
+    Enabled = false,
+    TeamCheck = true,
+    Distance = 50,
+    Mode = "Orbit",
+    Height = 5,
+    Speed = 5,
+    Radius = 15,
+    Prediction = true,
+    PredictionFactor = 0.135,
+    WallClipSafety = true,
+    Camlock = false,
+    Triggerbot = false,
+    Aimlock = false,
+    AimlockActive = false,
+    AimlockTargetPart = "Head",
+    AimlockKey = Enum.UserInputType.MouseButton2,
+    ToggleKey = Enum.KeyCode.G,
+    ShowFOV = false,
+    UseFOV = false,
+    FOVRadius = 120,
+    FOVColor = Color3.fromRGB(255, 255, 255)
+}
+
+local Movement = {
+    WalkSpeedEnabled = false,
+    WalkSpeed = 16,
+    JumpPowerEnabled = false,
+    JumpPower = 50,
+    InfiniteJump = false,
+    Noclip = false,
+    Spinbot = false,
+    SpinSpeed = 25,
+    Fly = false,
+    FlySpeed = 50,
+    CFrameSpeed = false,
+    CFrameSpeedVal = 50
+}
+
+local Visuals = {
+    Enabled = false,
+    TeamCheck = true,
+    UseTeamColor = false,
+    FillColor = Color3.fromRGB(255, 0, 127),
+    OutlineColor = Color3.fromRGB(255, 255, 255),
+    FillTransparency = 0.5,
+    OutlineTransparency = 0,
+    MotionTrails = true,
+    TrailColor = Color3.fromRGB(255, 0, 127),
+    RainbowTrail = false,
+    Crosshair = false,
+    CrosshairSize = 10,
+    CrosshairGap = 5,
+    CrosshairSpin = false,
+    CrosshairColor = Color3.fromRGB(0, 255, 176),
+    Fullbright = false,
+    Tracers = false,
+    Nametags = false,
+    Boxes2D = false,
+    Boxes3D = false,
+    HealthBar = false
+}
+
+local Rage = {
+    SilentAim = false,
+    HitboxSize = 13,
+    KillAll = false
+}
+
+local HitboxSizes = {
+    RightUpperLeg = Vector3.new(1.15, 1.21, 1.15),
+    LeftUpperLeg = Vector3.new(1.15, 1.21, 1.15),
+    HeadHB = Vector3.new(2, 1, 1),
+    HumanoidRootPart = Vector3.new(2, 2, 1)
+}
+
+local EspData = {}
+local KeysPressed = {}
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Visible = false
+FOVCircle.Thickness = 1.5
+FOVCircle.NumSides = 60
+FOVCircle.Filled = false
+
+local CrosshairLines = {
+    Top = Drawing.new("Line"),
+    Bottom = Drawing.new("Line"),
+    Left = Drawing.new("Line"),
+    Right = Drawing.new("Line")
+}
+
+for _, line in pairs(CrosshairLines) do
+    line.Thickness = 1.5
+    line.Transparency = 1
+    line.Visible = false
+end
+
+local WindUI
+local success, result = pcall(function()
+    return require("./src/Init")
+end)
+
+if success then
+    WindUI = result
+else
+    if RunService:IsStudio() then
+        local ReplicatedStorage = game:GetService("ReplicatedStorage")
+        local WindUI_Module = ReplicatedStorage:WaitForChild("WindUI")
+        WindUI = require(WindUI_Module:WaitForChild("Init"))
+    else
+        WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+    end
+
+    local HUD = Instance.new("ScreenGui")
+    HUD.Name = "YXZ_HUD_Esp"
+    HUD.ResetOnSpawn = false
+    HUD.Enabled = false
+
+    local HUD_Frame = Instance.new("Frame")
+    HUD_Frame.Size = UDim2.new(0, 220, 0, 45)
+    HUD_Frame.Position = UDim2.new(0.5, -110, 0.8, 0)
+    HUD_Frame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    HUD_Frame.BackgroundTransparency = 0.25
+    HUD_Frame.BorderSizePixel = 0
+    HUD_Frame.Parent = HUD
+
+    local HUD_Corner = Instance.new("UICorner")
+    HUD_Corner.CornerRadius = UDim.new(0, 8)
+    HUD_Corner.Parent = HUD_Frame
+
+    local HUD_Stroke = Instance.new("UIStroke")
+    HUD_Stroke.Color = Color3.fromRGB(255, 0, 127)
+    HUD_Stroke.Thickness = 1.5
+    HUD_Stroke.Parent = HUD_Frame
+
+    local HUD_Label = Instance.new("TextLabel")
+    HUD_Label.Size = UDim2.new(1, -20, 1, 0)
+    HUD_Label.Position = UDim2.new(0, 10, 0, 0)
+    HUD_Label.BackgroundTransparency = 1
+    HUD_Label.Font = Enum.Font.GothamBold
+    HUD_Label.TextSize = 13
+    HUD_Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    HUD_Label.TextXAlignment = Enum.TextXAlignment.Left
+    HUD_Label.TextYAlignment = Enum.TextYAlignment.Center
+    HUD_Label.Text = "AVATAR : USER : N/A"
+    HUD_Label.Parent = HUD_Frame
+
+    local success2 = pcall(function()
+        if gethui then
+            HUD.Parent = gethui()
+        else
+            local CoreGui = game:GetService("CoreGui")
+            if CoreGui then
+                HUD.Parent = CoreGui
+            else
+                HUD.Parent = LocalPlayer:WaitForChild("PlayerGui")
+            end
+        end
+    end)
+
+    if not success2 then
+        HUD.Parent = LocalPlayer:WaitForChild("PlayerGui")
+    end
+
+    local MainWindow = WindUI:CreateWindow({
+        Title = "COSMIC ARSENAL",
+        Folder = "cosmic_arsenal_yxz",
+        Icon = "solar:shield-keyhole-bold-duotone",
+        NewElements = true,
+        HideSearchBar = true,
+        OpenButton = {
+            Title = "Open YXZ Hub",
+            CornerRadius = UDim.new(1, 0),
+            StrokeThickness = 2,
+            Enabled = true,
+            Draggable = true,
+            OnlyMobile = false,
+            Scale = 0.5,
+            Color = ColorSequence.new(Color3.fromHex("#ff007f"), Color3.fromHex("#7f00ff"))
+        },
+        Topbar = {
+            Height = 40,
+            ButtonsType = "Mac"
+        }
+    })
+
+    MainWindow:Tag({
+        Title = "🌐",
+        Icon = "solar:shield-check-bold",
+        Color = Color3.fromHex("#131313"),
+        Border = true
+    })
+
+    Color3.fromHex("#FF2A5F")
+
+    local CosmicTab = MainWindow:Section({
+        Title = "Cosmic"
+    })
+
+    local CombatTab = CosmicTab:Tab({
+        Title = "Combat",
+        Icon = "solar:star-fall-minimalistic-bold-duotone",
+        IconColor = Color3.fromHex("#00FFB0"),
+        IconShape = "Square",
+        Border = true
+    })
+
+    local MasterSettings = CombatTab:Section({
+        Title = "Master Settings"
+    })
+
+    MasterSettings:Toggle({
+        Title = "Master Toggle",
+        Desc = "Turn combat loop on/off globally",
+        Value = Settings.Enabled,
+        Callback = function(value)
+            Settings.Enabled = value
+        end
+    })
+
+    MasterSettings:Space()
+
+    MasterSettings:Toggle({
+        Title = "Team Check",
+        Desc = "Ignore players on your team",
+        Value = Settings.TeamCheck,
+        Callback = function(value)
+            Settings.TeamCheck = value
+        end
+    })
+
+    MasterSettings:Space()
+
+    MasterSettings:Slider({
+        Title = "Target Distance Max",
+        IsTooltip = true,
+        Step = 5,
+        Value = {
+            Min = 10,
+            Max = 1000,
+            Default = Settings.Distance
+        },
+        Callback = function(value)
+            Settings.Distance = value
+        end
+    })
+
+    local OrbitSettings = CombatTab:Section({
+        Title = "Cosmic Orbit"
+    })
+
+    OrbitSettings:Dropdown({
+        Title = "Select Movement Mode",
+        Values = {
+            "Orbit",
+            "Void Shoot",
+            "Random",
+            "Helix",
+            "Behind Lock",
+            "Jitter",
+            "Infinity",
+            "Swoop",
+            "YXZ"
+        },
+        Value = Settings.Mode,
+        Callback = function(value)
+            Settings.Mode = value
+        end
+    })
+
+    OrbitSettings:Space()
+
+    OrbitSettings:Slider({
+        Title = "Range / Radius",
+        Desc = "Adjust distance from target",
+        IsTooltip = true,
+        Step = 1,
+        Value = {
+            Min = 2,
+            Max = 100,
+            Default = Settings.Radius
+        },
+        Callback = function(value)
+            Settings.Radius = value
+        end
+    })
+
+    OrbitSettings:Space()
+
+    OrbitSettings:Slider({
+        Title = "Height Offset",
+        Desc = "Y-Axis displacement height",
+        IsTooltip = true,
+        Step = 1,
+        Value = {
+            Min = -50,
+            Max = 50,
+            Default = Settings.Height
+        },
+        Callback = function(value)
+            Settings.Height = value
+        end
+    })
+
+    OrbitSettings:Space()
+
+    OrbitSettings:Slider({
+        Title = "Movement Speed",
+        Desc = "How fast the actions execute",
+        IsTooltip = true,
+        Step = 1,
+        Value = {
+            Min = 1,
+            Max = 50,
+            Default = Settings.Speed
+        },
+        Callback = function(value)
+            Settings.Speed = value
+        end
+    })
+
+    local AdvancedPhysics = CombatTab:Section({
+        Title = "Advanced Physics & Avoidance"
+    })
+
+    AdvancedPhysics:Toggle({
+        Title = "Target Velocity Prediction",
+        Desc = "Compensates for high target ping/speed to stay accurate",
+        Value = Settings.Prediction,
+        Callback = function(value)
+            Settings.Prediction = value
+        end
+    })
+
+    AdvancedPhysics:Space()
+
+    AdvancedPhysics:Slider({
+        Title = "Prediction Intensity",
+        IsTooltip = true,
+        Step = 0.01,
+        Value = {
+            Min = 0.01,
+            Max = 0.5,
+            Default = Settings.PredictionFactor
+        },
+        Callback = function(value)
+            Settings.PredictionFactor = value
+        end
+    })
+
+    AdvancedPhysics:Space()
+
+    AdvancedPhysics:Toggle({
+        Title = "Raycast Wall-Clip Safety",
+        Desc = "Prevents you from clipping through map walls and getting stuck",
+        Value = Settings.WallClipSafety,
+        Callback = function(value)
+            Settings.WallClipSafety = value
+        end
+    })
+
+    local AimbotSection = CombatTab:Section({
+        Title = "Aimbot & Shooting"
+    })
+
+    AimbotSection:Toggle({
+        Title = "Aimlock Enabled",
+        Desc = "Locks to enemies based on your designated keybind",
+        Value = Settings.Aimlock,
+        Callback = function(value)
+            Settings.Aimlock = value
+            if not value then
+                Settings.AimlockActive = false
+                HUD.Enabled = false
+            end
+        end
+    })
+
+    AimbotSection:Space()
+
+    AimbotSection:Dropdown({
+        Title = "Aimlock Target Part",
+        Desc = "Select part to lock onto",
+        Values = {"Head", "Torso"},
+        Value = Settings.AimlockTargetPart,
+        Callback = function(value)
+            Settings.AimlockTargetPart = value
+        end
+    })
+
+    AimbotSection:Space()
+
+    AimbotSection:Toggle({
+        Title = "Camlock (Master Lock)",
+        Desc = "Smoothly lock your camera view to the target constantly",
+        Value = Settings.Camlock,
+        Callback = function(value)
+            Settings.Camlock = value
+        end
+    })
+
+    AimbotSection:Space()
+
+    AimbotSection:Toggle({
+        Title = "Triggerbot",
+        Desc = "Auto-fires active weapon on targeted player",
+        Value = Settings.Triggerbot,
+        Callback = function(value)
+            Settings.Triggerbot = value
+        end
+    })
+
+    local FOVSection = CombatTab:Section({
+        Title = "Aimlock FOV Configuration"
+    })
+
+    FOVSection:Toggle({
+        Title = "Show FOV Circle",
+        Desc = "Displays the active targeting frame radius",
+        Value = Settings.ShowFOV,
+        Callback = function(value)
+            Settings.ShowFOV = value
+        end
+    })
+
+    FOVSection:Space()
+
+    FOVSection:Toggle({
+        Title = "Use FOV Filtering",
+        Desc = "Only lock onto players inside the FOV boundary",
+        Value = Settings.UseFOV,
+        Callback = function(value)
+            Settings.UseFOV = value
+        end
+    })
+
+    FOVSection:Space()
+
+    FOVSection:Slider({
+        Title = "FOV Radius Size",
+        IsTooltip = true,
+        Step = 1,
+        Value = {
+            Min = 1,
+            Max = 240,
+            Default = Settings.FOVRadius
+        },
+        Callback = function(value)
+            Settings.FOVRadius = value
+        end
+    })
+
+    FOVSection:Space()
+
+    FOVSection:Colorpicker({
+        Title = "FOV Border Color",
+        Default = Settings.FOVColor,
+        Callback = function(value)
+            Settings.FOVColor = value
+        end
+    })
+
+    local SelfUtilityTab = CosmicTab:Tab({
+        Title = "Self Utility",
+        Icon = "solar:user-bold-duotone",
+        IconColor = Color3.fromHex("#FF9E00"),
+        IconShape = "Square",
+        Border = true
+    })
+
+    local MovementAdjustments = SelfUtilityTab:Section({
+        Title = "Movement Adjustments"
+    })
+
+    MovementAdjustments:Toggle({
+        Title = "WalkSpeed",
+        Desc = "Enable the custom WalkSpeed slider below",
+        Value = Movement.WalkSpeedEnabled,
+        Callback = function(value)
+            Movement.WalkSpeedEnabled = value
+        end
+    })
+
+    MovementAdjustments:Space()
+
+    MovementAdjustments:Slider({
+        Title = "Custom WalkSpeed",
+        IsTooltip = true,
+        Step = 1,
+        Value = {
+            Min = 16,
+            Max = 250,
+            Default = Movement.WalkSpeed
+        },
+        Callback = function(value)
+            Movement.WalkSpeed = value
+        end
+    })
+
+    MovementAdjustments:Space()
+
+    MovementAdjustments:Toggle({
+        Title = "JumpPower",
+        Desc = "Enable the custom JumpPower slider below",
+        Value = Movement.JumpPowerEnabled,
+        Callback = function(value)
+            Movement.JumpPowerEnabled = value
+        end
+    })
+
+    MovementAdjustments:Space()
+
+    MovementAdjustments:Slider({
+        Title = "Custom JumpPower",
+        IsTooltip = true,
+        Step = 1,
+        Value = {
+            Min = 50,
+            Max = 500,
+            Default = Movement.JumpPower
+        },
+        Callback = function(value)
+            Movement.JumpPower = value
+        end
+    })
+
+    local BetterMovement = SelfUtilityTab:Section({
+        Title = "Better Movement"
+    })
+
+    BetterMovement:Toggle({
+        Title = "Smooth Fly Mod",
+        Desc = "Grants directional, key-controlled visual flying inside the game space",
+        Value = Movement.Fly,
+        Callback = function(value)
+            Movement.Fly = value
+        end
+    })
+
+    BetterMovement:Space()
+
+    BetterMovement:Slider({
+        Title = "Fly Velocity speed",
+        IsTooltip = true,
+        Step = 1,
+        Value = {
+            Min = 10,
+            Max = 200,
+            Default = Movement.FlySpeed
+        },
+        Callback = function(value)
+            Movement.FlySpeed = value
+        end
+    })
+
+    BetterMovement:Space()
+
+    BetterMovement:Toggle({
+        Title = "CFrame Flash Speed",
+        Desc = "Walk incredibly fast using dynamic frame-interpolation vectors",
+        Value = Movement.CFrameSpeed,
+        Callback = function(value)
+            Movement.CFrameSpeed = value
+        end
+    })
+
+    BetterMovement:Space()
+
+    BetterMovement:Slider({
+        Title = "Flash Speed Rate",
+        IsTooltip = true,
+        Step = 1,
+        Value = {
+            Min = 5,
+            Max = 300,
+            Default = Movement.CFrameSpeedVal
+        },
+        Callback = function(value)
+            Movement.CFrameSpeedVal = value
+        end
+    })
+
+    BetterMovement:Space()
+
+    BetterMovement:Toggle({
+        Title = "Infinite Jump",
+        Desc = "Allows you to scale infinite heights by holding or pressing Jump",
+        Value = Movement.InfiniteJump,
+        Callback = function(value)
+            Movement.InfiniteJump = value
+        end
+    })
+
+    BetterMovement:Space()
+
+    BetterMovement:Toggle({
+        Title = "Noclip Mode",
+        Desc = "Disables collision on your character, letting you pass through walls",
+        Value = Movement.Noclip,
+        Callback = function(value)
+            Movement.Noclip = value
+        end
+    })
+
+    BetterMovement:Space()
+
+    BetterMovement:Toggle({
+        Title = "Anti-Aim / Spinbot",
+        Desc = "Dramatically spins your character model to disorient enemy locks",
+        Value = Movement.Spinbot,
+        Callback = function(value)
+            Movement.Spinbot = value
+        end
+    })
+
+    BetterMovement:Space()
+
+    BetterMovement:Slider({
+        Title = "Spinbot Velocity Speed",
+        IsTooltip = true,
+        Step = 1,
+        Value = {
+            Min = 5,
+            Max = 100,
+            Default = Movement.SpinSpeed
+        },
+        Callback = function(value)
+            Movement.SpinSpeed = value
+        end
+    })
+
+    local VisualsTab = CosmicTab:Tab({
+        Title = "Visuals",
+        Icon = "solar:eye-bold-duotone",
+        IconColor = Color3.fromHex("#257AF7"),
+        IconShape = "Square",
+        Border = true
+    })
+
+    local CrosshairSection = VisualsTab:Section({
+        Title = "Crosshair"
+    })
+
+    CrosshairSection:Toggle({
+        Title = "Enable Crosshair",
+        Desc = "Displays a smooth vector layout crosshair on your mouse center",
+        Value = Visuals.Crosshair,
+        Callback = function(value)
+            Visuals.Crosshair = value
+        end
+    })
+
+    CrosshairSection:Space()
+
+    CrosshairSection:Toggle({
+        Title = "Spinning Crosshair Animation",
+        Desc = "Rotates the crosshair points consistently around your pointer",
+        Value = Visuals.CrosshairSpin,
+        Callback = function(value)
+            Visuals.CrosshairSpin = value
+        end
+    })
+
+    CrosshairSection:Space()
+
+    CrosshairSection:Slider({
+        Title = "Crosshair Line Size",
+        IsTooltip = true,
+        Step = 1,
+        Value = {
+            Min = 2,
+            Max = 40,
+            Default = Visuals.CrosshairSize
+        },
+        Callback = function(value)
+            Visuals.CrosshairSize = value
+        end
+    })
+
+    CrosshairSection:Space()
+
+    CrosshairSection:Slider({
+        Title = "Crosshair Inner Gap",
+        IsTooltip = true,
+        Step = 1,
+        Value = {
+            Min = 0,
+            Max = 25,
+            Default = Visuals.CrosshairGap
+        },
+        Callback = function(value)
+            Visuals.CrosshairGap = value
+        end
+    })
+
+    CrosshairSection:Space()
+
+    CrosshairSection:Colorpicker({
+        Title = "Crosshair Base Color",
+        Default = Visuals.CrosshairColor,
+        Callback = function(value)
+            Visuals.CrosshairColor = value
+        end
+    })
+
+    local ESPSection = VisualsTab:Section({
+        Title = "Player Highlights (ESP)"
+    })
+
+    local function CleanupPlayerESP(player)
+        local esp = EspData[player]
+        if esp then
+            if esp.Highlight then
+                pcall(function()
+                    esp.Highlight:Destroy()
+                end)
+            end
+            if esp.Tracer then
+                pcall(function()
+                    esp.Tracer:Destroy()
+                end)
+            end
+            if esp.Nametag then
+                pcall(function()
+                    esp.Nametag:Destroy()
+                end)
+            end
+            if esp.Box3D then
+                pcall(function()
+                    esp.Box3D:Destroy()
+                end)
+            end
+            if esp.Box2D then
+                for _, line in pairs(esp.Box2D) do
+                    pcall(function()
+                        line:Destroy()
+                    end)
+                end
+            end
+            if esp.HealthBar then
+                pcall(function()
+                    esp.HealthBar.Back:Destroy()
+                end)
+                pcall(function()
+                    esp.HealthBar.Fill:Destroy()
+                end)
+            end
+            EspData[player] = nil
+        end
+    end
+
+    local function ClearAllESP()
+        for _, player in ipairs(Players:GetPlayers()) do
+            CleanupPlayerESP(player)
+        end
+    end
+
+    ESPSection:Toggle({
+        Title = "Enable ESP Highlights",
+        Desc = "Highlight players through walls",
+        Value = Visuals.Enabled,
+        Callback = function(value)
+            Visuals.Enabled = value
+            if not value then
+                ClearAllESP()
+            end
+        end
+    })
+
+    ESPSection:Space()
+
+    ESPSection:Toggle({
+        Title = "Enable Tracers ESP",
+        Desc = "Draw vector screen lines to players",
+        Value = Visuals.Tracers,
+        Callback = function(value)
+            Visuals.Tracers = value
+            if not value then
+                ClearAllESP()
+            end
+        end
+    })
+
+    ESPSection:Space()
+
+    ESPSection:Toggle({
+        Title = "Enable NameTags ESP",
+        Desc = "Draw optimized 2D Nametags overhead",
+        Value = Visuals.Nametags,
+        Callback = function(value)
+            Visuals.Nametags = value
+            if not value then
+                ClearAllESP()
+            end
+        end
+    })
+
+    ESPSection:Space()
+
+    ESPSection:Toggle({
+        Title = "2D Boxes ESP",
+        Desc = "Draws 2D Box frame around enemies",
+        Value = Visuals.Boxes2D,
+        Callback = function(value)
+            Visuals.Boxes2D = value
+            if not value then
+                ClearAllESP()
+            end
+        end
+    })
+
+    ESPSection:Space()
+
+    ESPSection:Toggle({
+        Title = "3D Boxes ESP (Lag-Free)",
+        Desc = "Draws GPU-Rendered lag-free 3D Box adornments around player",
+        Value = Visuals.Boxes3D,
+        Callback = function(value)
+            Visuals.Boxes3D = value
+            if not value then
+                ClearAllESP()
+            end
+        end
+    })
+
+    ESPSection:Space()
+
+    ESPSection:Toggle({
+        Title = "Health Bar ESP",
+        Desc = "Displays active health gauge relative to 2D Box",
+        Value = Visuals.HealthBar,
+        Callback = function(value)
+            Visuals.HealthBar = value
+            if not value then
+                ClearAllESP()
+            end
+        end
+    })
+
+    local TrailsSection = VisualsTab:Section({
+        Title = "Cosmic Trails"
+    })
+
+    TrailsSection:Toggle({
+        Title = "Motion Trails",
+        Desc = "Emits visual light lines behind your character while moving",
+        Value = Visuals.MotionTrails,
+        Callback = function(value)
+            Visuals.MotionTrails = value
+        end
+    })
+
+    TrailsSection:Space()
+
+    TrailsSection:Toggle({
+        Title = "Rainbow Chroma Trails",
+        Desc = "Cycles through the full RGB color spectrum dynamically over time",
+        Value = Visuals.RainbowTrail,
+        Callback = function(value)
+            Visuals.RainbowTrail = value
+        end
+    })
+
+    TrailsSection:Space()
+
+    TrailsSection:Colorpicker({
+        Title = "Custom Trail Color",
+        Default = Visuals.TrailColor,
+        Callback = function(value)
+            Visuals.TrailColor = value
+        end
+    })
+
+    local FullbrightSection = VisualsTab:Section({
+        Title = "FullBright"
+    })
+
+    FullbrightSection:Toggle({
+        Title = "Enable Fullbright / Nightvision",
+        Desc = "Disables shadows, increases lighting brightness globally",
+        Value = Visuals.Fullbright,
+        Callback = function(value)
+            Visuals.Fullbright = value
+            if value then
+                Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+                Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+                Lighting.ClockTime = 12
+            else
+                Lighting.Ambient = Ambient
+                Lighting.OutdoorAmbient = OutdoorAmbient
+                Lighting.ClockTime = ClockTime
+            end
+        end
+    })
+
+    ESPSection:Space()
+
+    ESPSection:Toggle({
+        Title = "Team Check",
+        Desc = "Do not highlight friendly teammates",
+        Value = Visuals.TeamCheck,
+        Callback = function(value)
+            Visuals.TeamCheck = value
+            ClearAllESP()
+        end
+    })
+
+    ESPSection:Space()
+
+    ESPSection:Toggle({
+        Title = "Use Team Color",
+        Desc = "Use teammate/enemy system colors",
+        Value = Visuals.UseTeamColor,
+        Callback = function(value)
+            Visuals.UseTeamColor = value
+        end
+    })
+
+    ESPSection:Space()
+
+    ESPSection:Colorpicker({
+        Title = "Custom Fill Color",
+        Default = Visuals.FillColor,
+        Callback = function(value)
+            Visuals.FillColor = value
+        end
+    })
+
+    ESPSection:Space()
+
+    ESPSection:Colorpicker({
+        Title = "Custom Outline Color",
+        Default = Visuals.OutlineColor,
+        Callback = function(value)
+            Visuals.OutlineColor = value
+        end
+    })
+
+    local SettingsTab = CosmicTab:Tab({
+        Title = "Settings",
+        Icon = "solar:settings-bold-duotone",
+        IconColor = Color3.fromHex("#83889E"),
+        IconShape = "Square",
+        Border = true
+    })
+
+    local HotkeysSection = SettingsTab:Section({
+        Title = "Hotkeys & Input Manager"
+    })
+
+    HotkeysSection:Keybind({
+        Title = "Aimlock Key",
+        Desc = "The key or mouse click used to hold Aimlock",
+        Value = Settings.AimlockKey,
+        Callback = function(value)
+            Settings.AimlockKey = value
+        end
+    })
+
+    HotkeysSection:Space()
+
+    HotkeysSection:Keybind({
+        Title = "Master Combat Toggle",
+        Desc = "Instantly toggle Master Loop on or off",
+        Value = Settings.ToggleKey,
+        Callback = function(value)
+            Settings.ToggleKey = value
+        end
+    })
+
+    SettingsTab:Section({
+        Title = "Clean Up"
+    })
+
+    local function CleanupTrails()
+        if TrailObject1 then
+            pcall(function()
+                TrailObject1:Destroy()
+            end)
+        end
+        if TrailObject2 then
+            pcall(function()
+                TrailObject2:Destroy()
+            end)
+        end
+        if TrailObject3 then
+            pcall(function()
+                TrailObject3:Destroy()
+            end)
+        end
+    end
+
+    SettingsTab:Button({
+        Title = "Destroy UI Interface",
+        Color = Color3.fromHex("#EF4F1D"),
+        Justify = "Center",
+        Icon = "shredder",
+        IconAlign = "Left",
+        Callback = function()
+            ClearAllESP()
+            CleanupTrails()
+            FOVCircle:Destroy()
+            HUD:Destroy()
+            for _, line in pairs(CrosshairLines) do
+                line:Destroy()
+            end
+            Lighting.Ambient = Ambient
+            Lighting.OutdoorAmbient = OutdoorAmbient
+            Lighting.ClockTime = ClockTime
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and player.Character then
+                    for partName, originalSize in pairs(HitboxSizes) do
+                        local part = player.Character:FindFirstChild(partName)
+                        if part then
+                            part.Size = originalSize
+                            part.Transparency = 0
+                            part.CanCollide = true
+                        end
+                    end
+                end
+            end
+            MainWindow:Destroy()
+        end
+    })
+
+    local DiscordTab = MainWindow:Tab({
+        Title = "Discord",
+        Icon = "solar:share-circle-bold",
+        Border = true
+    })
+
+    DiscordTab:Paragraph({
+        Title = "Join our Discord Community!",
+        Desc = "Click the button below to copy the invite link to your clipboard.\n\nCredits to **scriptcontextluau for deobfuscating**",
+        Image = "solar:dialog-2-bold",
+        Buttons = {
+            {
+                Title = "Copy Link",
+                Icon = "link",
+                Callback = function()
+                    if setclipboard then
+                        setclipboard("bad boy")
+                        WindUI:Notify({
+                            Title = "Copied!",
+                            Content = "Discord link copied to clipboard."
+                        })
+                    else
+                        WindUI:Notify({
+                            Title = "Discord Invite",
+                            Content = "no just no"
+                        })
+                    end
+                end
+            }
+        }
+    })
+
+    local RageTab = MainWindow:Tab({
+        Title = "Rage",
+        Icon = "solar:fire-bold",
+        Border = true
+    })
+
+    if cloneref then
+        local ReplicatedStorage = game:GetService("ReplicatedStorage")
+        local WeaponDefaults = {}
+        local HitboxDefaults = {}
+        local SilentAimEnabled = false
+
+        task.spawn(function()
+            if next(WeaponDefaults) then
+                return
+            end
+            local weapons = ReplicatedStorage:FindFirstChild("Weapons")
+            if not weapons then
+                return
+            end
+            for _, weapon in ipairs(weapons:GetChildren()) do
+                WeaponDefaults[weapon.Name] = {}
+                for _, value in ipairs(weapon:GetChildren()) do
+                    if value:IsA("ValueBase") then
+                        WeaponDefaults[weapon.Name][value.Name] = value.Value
+                    end
+                end
+            end
+        end)
+
+        task.spawn(function()
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and player.Character then
+                    HitboxDefaults[player.Name] = {}
+                    for _, partName in ipairs({
+                        "RightUpperLeg",
+                        "LeftUpperLeg",
+                        "HeadHB",
+                        "HumanoidRootPart"
+                    }) do
+                        local part = player.Character:FindFirstChild(partName)
+                        if part then
+                            HitboxDefaults[player.Name][partName] = {
+                                Size = part.Size,
+                                Transparency = part.Transparency,
+                                CanCollide = part.CanCollide
+                            }
+                        end
+                    end
+                end
+            end
+        end)
+
+        local function ExpandHitboxes()
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and player.Character then
+                    for _, partName in ipairs({
+                        "RightUpperLeg",
+                        "LeftUpperLeg",
+                        "HeadHB",
+                        "HumanoidRootPart"
+                    }) do
+                        local part = player.Character:FindFirstChild(partName)
+                        if part then
+                            part.Size = Vector3.new(10, 10, 10)
+                            part.Transparency = 1
+                            part.CanCollide = false
+                        end
+                    end
+                end
+            end
+        end
+
+        local function RestoreHitboxes()
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer then
+                    local defaults = HitboxDefaults[player.Name]
+                    if defaults then
+                        for _, partName in ipairs({
+                            "RightUpperLeg",
+                            "LeftUpperLeg",
+                            "HeadHB",
+                            "HumanoidRootPart"
+                        }) do
+                            local part = player.Character and player.Character:FindFirstChild(partName)
+                            local defaultData = defaults[partName]
+                            if part and defaultData then
+                                part.Size = defaultData.Size
+                                part.Transparency = defaultData.Transparency
+                                part.CanCollide = defaultData.CanCollide
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        local RageSettings = RageTab:Section({
+            Title = "Aim Modifications"
+        })
+
+        RageSettings:Toggle({
+            Title = "Silent Aim (Hitbox Expander)",
+            Value = false,
+            Callback = function(value)
+                SilentAimEnabled = value
+                if value then
+                    ExpandHitboxes()
+                else
+                    RestoreHitboxes()
+                end
+            end
+        })
+
+        Players.PlayerAdded:Connect(function(player)
+            player.CharacterAdded:Connect(function()
+                task.wait(0.8)
+                if SilentAimEnabled then
+                    ExpandHitboxes()
+                end
+            end)
+        end)
+
+        task.spawn(function()
+            while true do
+                task.wait(0.5)
+                if SilentAimEnabled then
+                    ExpandHitboxes()
+                end
+            end
+        end)
+
+        local WeaponMods = RageTab:Section({
+            Title = "Weapon Modifications"
+        })
+
+        WeaponMods:Toggle({
+            Title = "Infinite Ammo",
+            Callback = function(value)
+                local weapons = ReplicatedStorage:FindFirstChild("Weapons")
+                if not weapons then
+                    return
+                end
+                for _, weapon in ipairs(weapons:GetChildren()) do
+                    for _, valueObject in ipairs(weapon:GetChildren()) do
+                        if valueObject.Name == "Ammo" or valueObject.Name == "StoredAmmo" then
+                            valueObject.Value = value and 300 or (WeaponDefaults[weapon.Name] and WeaponDefaults[weapon.Name][valueObject.Name] or valueObject.Value)
+                        end
+                    end
+                end
+            end
+        })
+
+        WeaponMods:Toggle({
+            Title = "Infinite Range",
+            Callback = function(value)
+                local weapons = ReplicatedStorage:FindFirstChild("Weapons")
+                if not weapons then
+                    return
+                end
+                for _, weapon in ipairs(weapons:GetChildren()) do
+                    local range = weapon:FindFirstChild("Range")
+                    if range then
+                        range.Value = value and 9000000000 or (WeaponDefaults[weapon.Name] and WeaponDefaults[weapon.Name].Range or range.Value)
+                    end
+                end
+            end
+        })
+
+        WeaponMods:Toggle({
+            Title = "Instant Reload",
+            Callback = function(value)
+                local weapons = ReplicatedStorage:FindFirstChild("Weapons")
+                if not weapons then
+                    return
+                end
+                for _, weapon in ipairs(weapons:GetChildren()) do
+                    for _, valueObject in ipairs(weapon:GetChildren()) do
+                        if valueObject.Name == "AReload" or valueObject.Name == "RecoilControl" or valueObject.Name == "EReload" or valueObject.Name == "SReload" then
+                            valueObject.Value = value and 0 or (WeaponDefaults[weapon.Name] and WeaponDefaults[weapon.Name][valueObject.Name] or valueObject.Value)
+                        end
+                    end
+                end
+            end
+        })
+
+        WeaponMods:Toggle({
+            Title = "No Recoil",
+            Callback = function(value)
+                local weapons = ReplicatedStorage:FindFirstChild("Weapons")
+                if not weapons then
+                    return
+                end
+                for _, weapon in ipairs(weapons:GetChildren()) do
+                    for _, valueObject in ipairs(weapon:GetChildren()) do
+                        if valueObject.Name == "FireRate" or valueObject.Name == "BFireRate" then
+                            valueObject.Value = value and 0.02 or (WeaponDefaults[weapon.Name] and WeaponDefaults[weapon.Name][valueObject.Name] or valueObject.Value)
+                        end
+                    end
+                end
+            end
+        })
+
+        WeaponMods:Toggle({
+            Title = "Auto Fire (Scripts)",
+            Callback = function(value)
+                local weapons = ReplicatedStorage:FindFirstChild("Weapons")
+                if not weapons then
+                    return
+                end
+                for _, weapon in ipairs(weapons:GetChildren()) do
+                    for _, module in ipairs(weapon:GetChildren()) do
+                        if module:IsA("ModuleScript") then
+                            local success, scriptTable = pcall(require, module)
+                            if success and type(scriptTable) == "table" then
+                                scriptTable.Auto = value
+                            end
+                        end
+                    end
+                end
+            end
+        })
+    end
+
+    local OrbitAngle = 0
+    local VoidTimer = 0
+    local VoidToggle = true
+    local TrailObject1 = nil
+    local TrailObject2 = nil
+    local TrailObject3 = nil
+
+    local function GetTargetPart(character)
+        if not character then
+            return nil
+        end
+        if Settings.AimlockTargetPart == "Head" then
+            local head = character:FindFirstChild("Head")
+            if head then
+                return head
+            end
+        end
+        local rootPart = character:FindFirstChild("HumanoidRootPart")
+        if rootPart then
+            return rootPart
+        else
+            return character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
+        end
+    end
+
+    local function IsTeammate(player)
+        if not Visuals.TeamCheck then
+            return false
+        end
+        if not LocalPlayer.Team or not player.Team then
+            return false
+        end
+        return LocalPlayer.Team == player.Team
+    end
+
+    local function GetClosestTarget()
+        local maxDistance = Rage.KillAll and 99999 or Settings.Distance
+        local closestDistance = math.huge
+        local closestPlayer = nil
+        local character = LocalPlayer.Character
+        if not character or not character:FindFirstChild("HumanoidRootPart") then
+            return nil
+        end
+        local rootPart = LocalPlayer.Character.HumanoidRootPart
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character then
+                if Settings.TeamCheck and IsTeammate(player) then
+                else
+                    local targetPart = GetTargetPart(player.Character)
+                    if targetPart then
+                        local distance = (player.Character.HumanoidRootPart.Position - rootPart.Position).Magnitude
+                        if distance <= maxDistance then
+                            local screenPoint = Camera:WorldToViewportPoint(targetPart.Position)
+                            if Settings.UseFOV then
+                                local fovDistance = (Vector2.new(screenPoint.X, screenPoint.Y) - UserInputService:GetMouseLocation()).Magnitude
+                                if fovDistance <= Settings.FOVRadius and fovDistance < closestDistance then
+                                    closestDistance = fovDistance
+                                    closestPlayer = player
+                                end
+                            else
+                                if distance < closestDistance then
+                                    closestDistance = distance
+                                    closestPlayer = player
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        return closestPlayer
+    end
+
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        KeysPressed[input.KeyCode] = true
+        if gameProcessed then
+            return
+        end
+        if input.KeyCode == Settings.ToggleKey then
+            Settings.Enabled = not Settings.Enabled
+        end
+        if Settings.Aimlock then
+            local isAimKey = false
+            if input.UserInputType == Settings.AimlockKey or input.KeyCode == Settings.AimlockKey then
+                isAimKey = true
+            end
+            if isAimKey then
+                Settings.AimlockActive = true
+            end
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        KeysPressed[input.KeyCode] = false
+        if Settings.Aimlock then
+            local isAimKey = false
+            if input.UserInputType == Settings.AimlockKey or input.KeyCode == Settings.AimlockKey then
+                isAimKey = true
+            end
+            if isAimKey then
+                Settings.AimlockActive = false
+            end
+        end
+    end)
+
+    UserInputService.JumpRequest:Connect(function()
+        if Movement.InfiniteJump and LocalPlayer.Character then
+            local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end
+    end)
+
+    local function GetPlayerColor(player)
+        if Visuals.UseTeamColor and player.TeamColor and player.TeamColor.Color then
+            return player.TeamColor.Color
+        else
+            return Visuals.FillColor
+        end
+    end
+
+    local function InitializeESP(player)
+        if EspData[player] then
+            return
+        end
+        EspData[player] = {
+            Highlight = nil,
+            Tracer = nil,
+            Nametag = nil,
+            Box2D = nil,
+            Box3D = nil,
+            HealthBar = nil
+        }
+    end
+
+    Players.PlayerRemoving:Connect(CleanupPlayerESP)
+
+    local function HandleMotionTrails(character)
+        if not Visuals.MotionTrails or not character then
+            CleanupTrails()
+            return
+        end
+    end
+
+    RunService.RenderStepped:Connect(function(deltaTime)
+        local character = LocalPlayer.Character
+        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+        if humanoid then
+            if Movement.WalkSpeedEnabled then
+                humanoid.WalkSpeed = Movement.WalkSpeed
+            end
+            if Movement.JumpPowerEnabled then
+                humanoid.JumpPower = Movement.JumpPower
+            end
+        end
+
+        if Movement.CFrameSpeed and rootPart and humanoid then
+            rootPart.CFrame = rootPart.CFrame + humanoid.MoveDirection * Movement.CFrameSpeedVal * deltaTime
+        end
+
+        local flyEnabled = Movement.Fly
+        local crosshairEnabled = Visuals.Crosshair
+        if flyEnabled then
+            crosshairEnabled = character and character:FindFirstChild("HumanoidRootPart")
+        end
+
+        if crosshairEnabled and rootPart then
+            local velocity = Vector3.new()
+            if KeysPressed[Enum.KeyCode.W] then
+                velocity = velocity + Camera.CFrame.LookVector
+            end
+            if KeysPressed[Enum.KeyCode.S] then
+                velocity = velocity - Camera.CFrame.LookVector
+            end
+            if KeysPressed[Enum.KeyCode.A] then
+                velocity = velocity - Camera.CFrame.RightVector
+            end
+            if KeysPressed[Enum.KeyCode.D] then
+                velocity = velocity + Camera.CFrame.RightVector
+            end
+            if KeysPressed[Enum.KeyCode.Space] then
+                velocity = velocity + Vector3.new(0, 1, 0)
+            end
+            if KeysPressed[Enum.KeyCode.LeftShift] then
+                velocity = velocity - Vector3.new(0, 1, 0)
+            end
+            rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            if velocity.Magnitude > 0 then
+                rootPart.CFrame = rootPart.CFrame + velocity.Unit * Movement.FlySpeed * deltaTime
+            end
+        end
+
+        if Movement.Noclip and character then
+            for _, part in ipairs(character:GetDescendants()) do
+                if part:IsA("BasePart") and part.CanCollide then
+                    part.CanCollide = false
+                end
+            end
+        end
+
+        if Settings.Aimlock and Settings.ShowFOV then
+            FOVCircle.Visible = true
+            FOVCircle.Radius = Settings.FOVRadius
+            FOVCircle.Position = UserInputService:GetMouseLocation()
+            FOVCircle.Color = Settings.FOVColor
+        else
+            FOVCircle.Visible = false
+        end
+
+        if Visuals.Crosshair then
+            local mousePos = UserInputService:GetMouseLocation()
+            local spinAngle = Visuals.CrosshairSpin and tick() * 3 or 0
+            local gap = Visuals.CrosshairGap
+            for direction, angle in pairs({
+                Right = 0,
+                Bottom = math.pi / 2,
+                Left = math.pi,
+                Top = math.pi * 1.5
+            }) do
+                local offset = spinAngle + angle
+                local directionVector = Vector2.new(math.cos(offset), math.sin(offset))
+                local line = CrosshairLines[direction]
+                line.Color = Visuals.CrosshairColor
+                line.From = mousePos + directionVector * gap
+                line.To = mousePos + directionVector * (gap + Visuals.CrosshairSize)
+                line.Visible = true
+            end
+        else
+            for _, line in pairs(CrosshairLines) do
+                line.Visible = false
+            end
+            HandleMotionTrails(rootPart)
+            
+            local combatEnabled = Settings.Enabled or Rage.KillAll or Settings.Aimlock
+            local spinbotEnabled = Movement.Spinbot
+            
+            if combatEnabled and rootPart then
+                local target = GetClosestTarget()
+                if target then
+                    local targetPart = GetTargetPart(target.Character)
+                    if targetPart then
+                        local targetPosition = targetPart.Position
+                        if Settings.Prediction then
+                            targetPosition = targetPart.Position + targetPart.AssemblyLinearVelocity * Settings.PredictionFactor
+                        end
+                        
+                        if Rage.KillAll then
+                            OrbitAngle = (OrbitAngle + 2 * deltaTime) % (math.pi * 2)
+                            local newCFrame = CFrame.new(targetPosition + Vector3.new(math.cos(OrbitAngle) * 2, 0, math.sin(OrbitAngle) * 2), targetPosition)
+                            rootPart.CFrame = newCFrame
+                            local tool = character:FindFirstChildOfClass("Tool")
+                            if tool then
+                                tool:Activate()
+                            end
+                        else
+                            if Settings.Enabled then
+                                local newCFrame = rootPart.CFrame
+                                if Settings.Mode == "Orbit" then
+                                    OrbitAngle = (OrbitAngle + Settings.Speed * deltaTime) % (math.pi * 2)
+                                    newCFrame = CFrame.new(targetPosition + Vector3.new(math.cos(OrbitAngle) * Settings.Radius, Settings.Height, math.sin(OrbitAngle) * Settings.Radius), targetPosition)
+                                elseif Settings.Mode == "Void Shoot" then
+                                    VoidTimer = VoidTimer + deltaTime
+                                    if VoidTimer >= 1 / math.clamp(Settings.Speed * 0.1, 0.1, 10) then
+                                        VoidTimer = 0
+                                        VoidToggle = not VoidToggle
+                                    end
+                                    if VoidToggle then
+                                        newCFrame = CFrame.new(rootPart.Position + Vector3.new(0, -400, 0))
+                                    else
+                                        newCFrame = CFrame.new(targetPosition + Vector3.new(0, Settings.Height, Settings.Radius), targetPosition)
+                                    end
+                                elseif Settings.Mode == "Random" then
+                                    OrbitAngle = (OrbitAngle + Settings.Speed * deltaTime) % (math.pi * 2)
+                                    newCFrame = CFrame.new(targetPosition + Vector3.new(math.random(-Settings.Radius, Settings.Radius), math.random(-math.abs(Settings.Height), math.abs(Settings.Height)), math.random(-Settings.Radius, Settings.Radius)), targetPosition)
+                                elseif Settings.Mode == "Helix" then
+                                    OrbitAngle = (OrbitAngle + Settings.Speed * deltaTime) % (math.pi * 2)
+                                    newCFrame = CFrame.new(targetPosition + Vector3.new(math.cos(OrbitAngle) * Settings.Radius, math.sin(OrbitAngle * 2) * Settings.Height, math.sin(OrbitAngle) * Settings.Radius), targetPosition)
+                                elseif Settings.Mode == "Behind Lock" then
+                                    newCFrame = CFrame.new(targetPosition - rootPart.CFrame.LookVector * Settings.Radius + Vector3.new(0, Settings.Height, 0), targetPosition)
+                                elseif Settings.Mode == "Jitter" then
+                                    OrbitAngle = (OrbitAngle + Settings.Speed * deltaTime) % (math.pi * 2)
+                                    newCFrame = CFrame.new(targetPosition + rootPart.CFrame.RightVector * (math.sin(OrbitAngle * 6) > 0 and 1 or -1) * Settings.Radius + Vector3.new(0, Settings.Height, 0), targetPosition)
+                                elseif Settings.Mode == "Infinity" then
+                                    OrbitAngle = (OrbitAngle + Settings.Speed * deltaTime) % (math.pi * 2)
+                                    newCFrame = CFrame.new(targetPosition + Vector3.new(math.sin(OrbitAngle) * Settings.Radius, Settings.Height, math.sin(2 * OrbitAngle) * Settings.Radius / 2), targetPosition)
+                                elseif Settings.Mode == "Swoop" then
+                                    OrbitAngle = (OrbitAngle + Settings.Speed * deltaTime) % (math.pi * 2)
+                                    newCFrame = CFrame.new(targetPosition + rootPart.CFrame.LookVector * math.cos(OrbitAngle) * Settings.Radius + Vector3.new(0, math.sin(OrbitAngle) * Settings.Height, 0), targetPosition)
+                                elseif Settings.Mode == "YXZ" then
+                                    OrbitAngle = (OrbitAngle + Settings.Speed * deltaTime) % (math.pi * 2)
+                                    newCFrame = CFrame.new(targetPosition - rootPart.CFrame.LookVector * Settings.Radius + rootPart.CFrame.RightVector * math.sin(OrbitAngle) * Settings.Radius * 0.4 + Vector3.new(0, Settings.Height, 0), targetPosition)
+                                end
+                                rootPart.CFrame = rootPart.CFrame:Lerp(newCFrame, math.clamp(deltaTime * Settings.Speed, 0, 1))
+                            end
+
+                            if Settings.WallClipSafety and not Movement.Noclip and rootPart then
+                                local origin = rootPart.Position
+                                local raycastParams = RaycastParams.new()
+                                raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+                                local filterList = {}
+                                for _, player in ipairs(Players:GetPlayers()) do
+                                    if player.Character then
+                                        table.insert(filterList, player.Character)
+                                    end
+                                end
+                                raycastParams.FilterDescendantsInstances = filterList
+                                local raycastResult = workspace:Raycast(origin, rootPart.Position - origin, raycastParams)
+                                if raycastResult then
+                                    rootPart.CFrame = CFrame.new(raycastResult.Position + raycastResult.Normal * 1.5, rootPart.Position)
+                                end
+                            end
+
+                            local canLock = false
+                            if not IsTeammate(target) then
+                                canLock = true
+                            end
+
+                            if canLock and Settings.Camlock then
+                                Camera.CFrame = CFrame.new(Camera.CFrame.Position, rootPart.Position)
+                                local targetName = target.Name
+                                HUD_Label.Text = string.format(". : USER : %s", string.upper(targetName))
+                                HUD.Enabled = true
+                            else
+                                HUD.Enabled = false
+                            end
+
+                            if Settings.Triggerbot then
+                                local tool = character:FindFirstChildOfClass("Tool")
+                                if tool then
+                                    tool:Activate()
+                                end
+                            end
+                        end
+                    end
+                else
+                    HUD.Enabled = false
+                end
+            end
+
+            if Movement.Spinbot and rootPart then
+                rootPart.CFrame = rootPart.CFrame * CFrame.Angles(0, math.rad(Movement.SpinSpeed), 0)
+            end
+
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer then
+                    local playerChar = player.Character
+                    if not playerChar then
+                        CleanupPlayerESP(player)
+                    end
+                    
+                    local isTeammate = IsTeammate(player)
+                    
+                    if isTeammate and Visuals.TeamCheck then
+                        if EspData[player] then
+                            CleanupPlayerESP(player)
+                        end
+                    else
+                        InitializeESP(player)
+                        local esp = EspData[player]
+                        local rootPart2 = playerChar and playerChar:FindFirstChild("HumanoidRootPart")
+                        local humanoid2 = playerChar and playerChar:FindFirstChild("Humanoid")
+
+                        if rootPart2 and humanoid2 and humanoid2.Health > 0 then
+                            local worldPoint = Camera:WorldToViewportPoint(rootPart2.Position)
+                            local playerColor = GetPlayerColor(player)
+
+                            if Visuals.Enabled then
+                                if not esp.Highlight then
+                                    esp.Highlight = Instance.new("Highlight")
+                                    esp.Highlight.Name = "YXZ_AdornHighlight"
+                                    esp.Highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                                    esp.Highlight.Parent = player.Character
+                                end
+                                esp.Highlight.Adornee = player.Character
+                                esp.Highlight.FillColor = GetPlayerColor(player)
+                                esp.Highlight.OutlineColor = Visuals.OutlineColor
+                                esp.Highlight.FillTransparency = Visuals.FillTransparency
+                                esp.Highlight.OutlineTransparency = Visuals.OutlineTransparency
+                                esp.Highlight.Enabled = true
+                            else
+                                if esp.Highlight then
+                                    EspData[player].Highlight.Enabled = false
+                                end
+
+                                if Visuals.Tracers then
+                                    if not esp.Tracer then
+                                        esp.Tracer = Drawing.new("Line")
+                                        esp.Tracer.Thickness = 1.2
+                                        esp.Tracer.Transparency = 1
+                                    end
+                                    esp.Tracer.Color = GetPlayerColor(player)
+                                    esp.Tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                                    esp.Tracer.To = Vector2.new(worldPoint.X, worldPoint.Y)
+                                    esp.Tracer.Visible = true
+                                else
+                                    if esp.Tracer then
+                                        EspData[player].Tracer.Visible = false
+                                    end
+
+                                    local head = playerChar:FindFirstChild("Head")
+                                    local rootPart3 = playerChar:FindFirstChild("HumanoidRootPart")
+                                    if head and rootPart3 then
+                                        local headPos = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
+                                        local rootPos = Camera:WorldToViewportPoint(rootPart3.Position - Vector3.new(0, 3, 0))
+                                        local height = math.abs(headPos.Y - rootPos.Y)
+                                        local halfWidth = height / 2
+                                        local topLeft = Vector2.new(worldPoint.X - halfWidth / 2, headPos.Y)
+
+                                        if Visuals.Boxes2D then
+                                            if not esp.Box2D then
+                                                esp.Box2D = {
+                                                    Top = Drawing.new("Line"),
+                                                    Bottom = Drawing.new("Line"),
+                                                    Left = Drawing.new("Line"),
+                                                    Right = Drawing.new("Line")
+                                                }
+                                                for _, line in pairs(esp.Box2D) do
+                                                    line.Thickness = 1.2
+                                                    line.Transparency = 1
+                                                end
+                                            end
+                                            local color = GetPlayerColor(player)
+                                            esp.Box2D.Top.Color = color
+                                            esp.Box2D.Top.From = Vector2.new(worldPoint.X - halfWidth / 2, headPos.Y)
+                                            esp.Box2D.Top.To = topLeft + Vector2.new(halfWidth, 0)
+                                            esp.Box2D.Bottom.Color = color
+                                            esp.Box2D.Bottom.From = topLeft + Vector2.new(0, height)
+                                            esp.Box2D.Bottom.To = topLeft + Vector2.new(halfWidth, height)
+                                            esp.Box2D.Left.Color = color
+                                            esp.Box2D.Left.From = topLeft
+                                            esp.Box2D.Left.To = topLeft + Vector2.new(0, height)
+                                            esp.Box2D.Right.Color = color
+                                            esp.Box2D.Right.From = topLeft + Vector2.new(halfWidth, 0)
+                                            esp.Box2D.Right.To = topLeft + Vector2.new(halfWidth, height)
+                                            for _, line in pairs(esp.Box2D) do
+                                                line.Visible = true
+                                            end
+                                        else
+                                            if esp.Box2D then
+                                                for _, line in pairs(EspData[player].Box2D) do
+                                                    line.Visible = false
+                                                end
+                                            end
+
+                                            if Visuals.HealthBar then
+                                                if not esp.HealthBar then
+                                                    esp.HealthBar = {
+                                                        Back = Drawing.new("Line"),
+                                                        Fill = Drawing.new("Line")
+                                                    }
+                                                    esp.HealthBar.Back.Thickness = 3
+                                                    esp.HealthBar.Back.Color = Color3.fromRGB(30, 30, 30)
+                                                    esp.HealthBar.Back.Transparency = 0.8
+                                                    esp.HealthBar.Fill.Thickness = 1.5
+                                                    esp.HealthBar.Fill.Transparency = 1
+                                                end
+                                                local healthPercent = math.clamp(humanoid2.Health / humanoid2.MaxHealth, 0, 1)
+                                                local xPos = topLeft.X - 5
+                                                esp.HealthBar.Back.From = Vector2.new(xPos, topLeft.Y)
+                                                esp.HealthBar.Back.To = Vector2.new(xPos, topLeft.Y + height)
+                                                esp.HealthBar.Back.Visible = true
+                                                esp.HealthBar.Fill.From = Vector2.new(xPos, topLeft.Y + height)
+                                                esp.HealthBar.Fill.To = Vector2.new(xPos, topLeft.Y + height - height * healthPercent)
+                                                esp.HealthBar.Fill.Color = Color3.fromRGB(255 - 255 * healthPercent, 255 * healthPercent, 0)
+                                                esp.HealthBar.Fill.Visible = true
+                                            else
+                                                if esp.HealthBar then
+                                                    esp.HealthBar.Back.Visible = false
+                                                    esp.HealthBar.Fill.Visible = false
+                                                end
+
+                                                if Visuals.Boxes3D then
+                                                    if not esp.Box3D then
+                                                        local box = Instance.new("SelectionBox")
+                                                        box.Name = "YXZ_3DBox"
+                                                        box.LineThickness = 0.05
+                                                        box.Color3 = GetPlayerColor(player)
+                                                        box.Parent = Camera
+                                                        EspData[player].Box3D = box
+                                                    end
+                                                    esp.Box3D.Color3 = GetPlayerColor(player)
+                                                    esp.Box3D.Adornee = player.Character
+                                                    esp.Box3D.Visible = true
+                                                else
+                                                    if esp.Box3D then
+                                                        EspData[player].Box3D.Visible = false
+                                                    end
+
+                                                    if Visuals.Nametags then
+                                                        if not esp.Nametag then
+                                                            esp.Nametag = Drawing.new("Text")
+                                                            esp.Nametag.Size = 13
+                                                            esp.Nametag.Center = true
+                                                            esp.Nametag.Outline = true
+                                                            esp.Nametag.Font = 3
+                                                        end
+                                                        esp.Nametag.Color = GetPlayerColor(player)
+                                                        esp.Nametag.Text = player.DisplayName or player.Name
+                                                        esp.Nametag.Position = Vector2.new(worldPoint.X, topLeft.Y - 15)
+                                                        esp.Nametag.Visible = true
+                                                    else
+                                                        if EspData[player].Nametag then
+                                                            EspData[player].Nametag.Visible = false
+                                                        end
+                                                    end
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end
