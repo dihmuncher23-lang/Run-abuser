@@ -1,38 +1,93 @@
--- Services
+--[[
+	Script Name: Slap Battles MR (Stone) with Custom WalkSpeed
+	Executor: delta
+	Made by Spamton G Spamton
+]]
+
+local TARGET_SPEED = 20 -- WalkSpeed set to 20 as requested
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-
 local player = Players.LocalPlayer
 
--- Configuration
--- 0.96 provides a long, heavy drift before settling to a stop.
-local FRICTION = 0.96 
-local STOP_THRESHOLD = 0.1 -- Very low so it doesn't stop until almost perfectly still
+if _G.SpamtonMRConnection then
+	_G.SpamtonMRConnection:Disconnect()
+	_G.SpamtonMRConnection = nil
+end
 
-RunService.RenderStepped:Connect(function()
-    local character = player.Character
-    if not character then return end
-    
-    local root = character:FindFirstChild("HumanoidRootPart")
-    local hum = character:FindFirstChild("Humanoid")
-    
-    -- Only apply friction if the player is NOT actively trying to move
-    if root and hum and hum.MoveDirection.Magnitude == 0 then
-        local vel = root.AssemblyLinearVelocity
-        
-        -- Check if we have significant horizontal movement
-        if math.abs(vel.X) > 0.1 or math.abs(vel.Z) > 0.1 then
-            -- Apply heavy friction for a long slide
-            local newX = vel.X * FRICTION
-            local newZ = vel.Z * FRICTION
-            
-            -- Final snap to zero to prevent "micro-drifting"
-            if math.abs(newX) < STOP_THRESHOLD then newX = 0 end
-            if math.abs(newZ) < STOP_THRESHOLD then newZ = 0 end
-            
-            root.AssemblyLinearVelocity = Vector3.new(newX, vel.Y, newZ)
-        end
-    end
+local mt = getrawmetatable(game)
+local oldNamecall = mt.__namecall
+setreadonly(mt, false)
+
+mt.__namecall = newcclosure(function(self, ...)
+	local method = getnamecallmethod()
+	
+	if method == "FireServer" and self.Name == "Spherify" then
+		task.spawn(function()
+			-- CANCEL LOGIC
+			if _G.SpamtonMRConnection then
+				_G.SpamtonMRConnection:Disconnect()
+				_G.SpamtonMRConnection = nil
+				
+				local char = player.Character
+				if char then
+					local hum = char:FindFirstChildOfClass("Humanoid")
+					if hum then 
+						hum.WalkSpeed = TARGET_SPEED 
+						task.delay(0.5, function()
+							if hum then hum.WalkSpeed = TARGET_SPEED end
+						end)
+					end
+				end
+				return
+			end
+			
+			-- INITIALIZATION
+			task.wait(0.05)
+			local character = player.Character
+			if not character then return end
+			
+			local humanoid = character:FindFirstChildOfClass("Humanoid")
+			local rootPart = character:FindFirstChild("HumanoidRootPart")
+			if not humanoid or not rootPart then return end
+			
+			local function cleanup()
+				if _G.SpamtonMRConnection then
+					_G.SpamtonMRConnection:Disconnect()
+					_G.SpamtonMRConnection = nil
+				end
+				if character and humanoid then
+					humanoid.WalkSpeed = TARGET_SPEED
+					task.delay(0.5, function()
+						if humanoid then humanoid.WalkSpeed = TARGET_SPEED end
+					end)
+				end
+				if rootPart then
+					rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+				end
+			end
+			
+			-- RUN LOOP
+			_G.SpamtonMRConnection = RunService.RenderStepped:Connect(function()
+				if not character.Parent or not humanoid or humanoid.Health <= 0 then
+					cleanup()
+					return
+				end
+				
+				humanoid.PlatformStand = false
+				
+				local moveDir = humanoid.MoveDirection
+				if moveDir.Magnitude > 0 then
+					-- Physics-based movement (remains at 125 for the fast roll effect)
+					rootPart.AssemblyLinearVelocity = Vector3.new(moveDir.X * 125, rootPart.AssemblyLinearVelocity.Y, moveDir.Z * 125)
+				else
+					rootPart.AssemblyLinearVelocity = Vector3.new(0, rootPart.AssemblyLinearVelocity.Y, 0)
+				end
+			end)
+		end)
+	end
+	
+	return oldNamecall(self, ...)
 end)
 
-print("MR Smooth-Stop: Maximum slide friction (0.96) applied.")
+setreadonly(mt, true)
+print("Spamton's Custom WalkSpeed Hook Loaded! Speed set to: " .. TARGET_SPEED)
