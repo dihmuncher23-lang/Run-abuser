@@ -1,0 +1,149 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+
+-- Create the GUI elements
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "TableButtonGui"
+screenGui.Parent = CoreGui
+
+local button = Instance.new("TextButton")
+button.Name = "TableButton"
+button.Size = UDim2.new(0, 75, 0, 75)
+button.Position = UDim2.new(0.5, -37.5, 0.75, -37.5)
+button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+button.TextColor3 = Color3.fromRGB(0, 0, 0)
+button.TextSize = 14
+button.Font = Enum.Font.SourceSansBold
+button.Text = "table"
+button.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(1, 0)
+corner.Parent = button
+
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(255, 50, 50)
+stroke.Thickness = 3
+stroke.Parent = button
+
+local lockButton = Instance.new("TextButton")
+lockButton.Name = "LockButton"
+lockButton.Size = UDim2.new(0, 24, 0, 24)
+lockButton.Position = UDim2.new(1, -20, 0, -2)
+lockButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+lockButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+lockButton.TextSize = 11
+lockButton.Font = Enum.Font.SourceSansBold
+lockButton.Text = "🔓"
+lockButton.Parent = button
+
+local lockCorner = Instance.new("UICorner")
+lockCorner.CornerRadius = UDim.new(1, 0)
+lockCorner.Parent = lockButton
+
+local function getTableflipTool()
+    local currentCharacter = player.Character
+    local backpack = player:FindFirstChildOfClass("Backpack")
+    
+    if currentCharacter and currentCharacter:FindFirstChild("Tableflip") then
+        return currentCharacter:FindFirstChild("Tableflip")
+    end
+    
+    if backpack and backpack:FindFirstChild("Tableflip") then
+        return backpack:FindFirstChild("Tableflip")
+    end
+    
+    return nil
+end
+
+local locked = false
+local dragging = false
+local dragInput, dragStart, startPos
+
+lockButton.MouseButton1Click:Connect(function()
+    locked = not locked
+    if locked then
+        lockButton.Text = "🔒"
+        lockButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    else
+        lockButton.Text = "🔓"
+        lockButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    end
+end)
+
+button.InputBegan:Connect(function(input)
+    if locked then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = button.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+button.InputChanged:Connect(function(input)
+    if locked then return end
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if not locked and dragging and input == dragInput then
+        local delta = input.Position - dragStart
+        button.Position = UDim2.new(
+            startPos.X.Scale, 
+            startPos.X.Offset + delta.X, 
+            startPos.Y.Scale, 
+            startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+local isCooldown = false
+local cooldownTime = 8.5
+
+button.MouseButton1Click:Connect(function()
+    if isCooldown or dragging then return end
+    
+    local tool = getTableflipTool()
+    if not tool then
+        button.Text = "NO"
+        task.wait(1.5)
+        button.Text = "table"
+        return
+    end
+
+    -- Fire server event
+    local success, err = pcall(function()
+        local Event = ReplicatedStorage.GeneralAbility
+        Event:FireServer()
+    end)
+
+    if not success then
+        return
+    end
+
+    isCooldown = true
+
+    -- Cooldown visual timer loop (8.5 seconds)
+    local timeLeft = cooldownTime
+    while timeLeft > 0 do
+        button.Text = string.format("%.1f", timeLeft)
+        local step = math.min(0.1, timeLeft)
+        task.wait(step)
+        timeLeft = timeLeft - step
+    end
+
+    button.Text = "table"
+    isCooldown = false
+end)
