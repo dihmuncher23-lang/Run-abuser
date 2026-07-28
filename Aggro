@@ -4,17 +4,6 @@ local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoid = character:WaitForChild("Humanoid")
-local animator = humanoid:WaitForChild("Animator")
-
--- Save your default walkspeed so we can restore it after
-local defaultWalkSpeed = humanoid.WalkSpeed
-
--- Load the animation
-local animObject = Instance.new("Animation")
-animObject.AnimationId = "rbxassetid://94305630911620"
-local animTrack = animator:LoadAnimation(animObject)
 
 -- Create the GUI elements
 local screenGui = Instance.new("ScreenGui")
@@ -23,52 +12,54 @@ screenGui.Parent = CoreGui
 
 local button = Instance.new("TextButton")
 button.Name = "AggroButton"
-button.Size = UDim2.new(0, 140, 0, 50)
-button.Position = UDim2.new(0.5, -70, 0.75, -25)
-button.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+button.Size = UDim2.new(0, 75, 0, 75)
+button.Position = UDim2.new(0.5, -37.5, 0.75, -37.5)
+button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
 button.TextColor3 = Color3.fromRGB(0, 0, 0)
-button.TextSize = 20
+button.TextSize = 14
 button.Font = Enum.Font.SourceSansBold
 button.Text = "AGGRO"
 button.Parent = screenGui
 
 local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 8)
+corner.CornerRadius = UDim.new(1, 0)
 corner.Parent = button
 
--- Create Lock Toggle Button
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(255, 50, 50)
+stroke.Thickness = 3
+stroke.Parent = button
+
 local lockButton = Instance.new("TextButton")
 lockButton.Name = "LockButton"
-lockButton.Size = UDim2.new(0, 30, 0, 30)
-lockButton.Position = UDim2.new(1, -35, 0, 5)
-lockButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+lockButton.Size = UDim2.new(0, 24, 0, 24)
+lockButton.Position = UDim2.new(1, -20, 0, -2)
+lockButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 lockButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-lockButton.TextSize = 14
+lockButton.TextSize = 11
 lockButton.Font = Enum.Font.SourceSansBold
 lockButton.Text = "🔓"
 lockButton.Parent = button
 
 local lockCorner = Instance.new("UICorner")
-lockCorner.CornerRadius = UDim.new(0, 6)
+lockCorner.CornerRadius = UDim.new(1, 0)
 lockCorner.Parent = lockButton
 
--- Function to check if the player has the Aggro glove/tool
-local function hasAggroGlove()
+local function getAggroTool()
     local currentCharacter = player.Character
     local backpack = player:FindFirstChildOfClass("Backpack")
     
     if currentCharacter and currentCharacter:FindFirstChild("Aggro") then
-        return true
+        return currentCharacter:FindFirstChild("Aggro")
     end
     
     if backpack and backpack:FindFirstChild("Aggro") then
-        return true
+        return backpack:FindFirstChild("Aggro")
     end
     
-    return false
+    return nil
 end
 
--- Dragging and Locking Logic
 local locked = false
 local dragging = false
 local dragInput, dragStart, startPos
@@ -80,7 +71,7 @@ lockButton.MouseButton1Click:Connect(function()
         lockButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
     else
         lockButton.Text = "🔓"
-        lockButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        lockButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     end
 end)
 
@@ -118,40 +109,67 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Cooldown handling & Ability Execution
 local isCooldown = false
 local cooldownTime = 6
 
 button.MouseButton1Click:Connect(function()
-    -- Ensure dragging didn't trigger it, not on cooldown, and the Aggro tool is present
     if isCooldown or dragging then return end
     
-    if not hasAggroGlove() then
-        button.Text = "NO AGGRO"
+    local tool = getAggroTool()
+    if not tool then
+        button.Text = "NO"
         task.wait(1.5)
         button.Text = "AGGRO"
         return
     end
 
+    -- Fire server first
+    local success, err = pcall(function()
+        ReplicatedStorage.GeneralAbility:FireServer()
+    end)
+
+    if not success then
+        return
+    end
+
     isCooldown = true
 
-    -- Update references in case character respawned
-    local currentHumanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-    if currentHumanoid then
-        currentHumanoid.WalkSpeed = 3
+    -- Fetch character, humanoid, and animator FRESH on click to prevent missing references
+    local char = player.Character
+    local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+    local animator = humanoid and humanoid:FindFirstChildOfClass("Animator")
+
+    if not humanoid or not animator then
+        isCooldown = false
+        button.Text = "AGGRO"
+        return
     end
-    
+
+    local defaultWalkSpeed = humanoid.WalkSpeed
+    humanoid.WalkSpeed = 3
+
+    -- Load and play animation dynamically
+    local animObject = Instance.new("Animation")
+    animObject.AnimationId = "rbxassetid://94305630911620"
+    local animTrack = animator:LoadAnimation(animObject)
     animTrack:Play()
 
-    -- Fire the server ability remote
-    ReplicatedStorage.GeneralAbility:FireServer()
-
-    -- Restore original walkspeed automatically when the animation stops
+    -- Restore walkspeed safely when done or character dies
     task.spawn(function()
-        animTrack.Stopped:Wait()
-        local activeHumanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-        if activeHumanoid then
-            activeHumanoid.WalkSpeed = defaultWalkSpeed
+        local stopped = false
+        local conn
+        conn = animTrack.Stopped:Connect(function()
+            stopped = true
+        end)
+
+        while not stopped and char and humanoid and humanoid.Health > 0 do
+            task.wait(0.1)
+        end
+
+        if conn then conn:Disconnect() end
+
+        if humanoid and humanoid.Parent then
+            humanoid.WalkSpeed = defaultWalkSpeed
         end
     end)
 
@@ -161,7 +179,6 @@ button.MouseButton1Click:Connect(function()
         task.wait(1)
     end
 
-    -- Reset button state
     button.Text = "AGGRO"
     isCooldown = false
 end)
