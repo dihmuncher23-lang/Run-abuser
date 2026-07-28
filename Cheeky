@@ -14,6 +14,51 @@ if _G.SpamtonMRConnection then
 	_G.SpamtonMRConnection = nil
 end
 
+if _G.SpamtonRespawnConnection then
+	_G.SpamtonRespawnConnection:Disconnect()
+	_G.SpamtonRespawnConnection = nil
+end
+
+local function resetSpeed(hum)
+	if hum then
+		hum.WalkSpeed = TARGET_SPEED
+		task.delay(0.5, function()
+			if hum then hum.WalkSpeed = TARGET_SPEED end
+		end)
+	end
+end
+
+-- Global cleanup helper so respawns also kill active loops and reset speeds
+local function forceCleanup()
+	if _G.SpamtonMRConnection then
+		_G.SpamtonMRConnection:Disconnect()
+		_G.SpamtonMRConnection = nil
+	end
+	local char = player.Character
+	if char then
+		local hum = char:FindFirstChildOfClass("Humanoid")
+		resetSpeed(hum)
+		local rootPart = char:FindFirstChild("HumanoidRootPart")
+		if rootPart then
+			rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+		end
+	end
+end
+
+-- Listen for character respawns to handle death + remote re-fires cleanly
+_G.SpamtonRespawnConnection = player.CharacterAdded:Connect(function(newChar)
+	forceCleanup()
+	newChar:WaitForChild("Humanoid").Died:Connect(function()
+		forceCleanup()
+	end)
+end)
+
+if player.Character then
+	player.Character:WaitForChild("Humanoid").Died:Connect(function()
+		forceCleanup()
+	end)
+end
+
 local mt = getrawmetatable(game)
 local oldNamecall = mt.__namecall
 setreadonly(mt, false)
@@ -23,21 +68,9 @@ mt.__namecall = newcclosure(function(self, ...)
 	
 	if method == "FireServer" and self.Name == "Spherify" then
 		task.spawn(function()
-			-- CANCEL LOGIC
+			-- CANCEL LOGIC (fires when remote is triggered a second time)
 			if _G.SpamtonMRConnection then
-				_G.SpamtonMRConnection:Disconnect()
-				_G.SpamtonMRConnection = nil
-				
-				local char = player.Character
-				if char then
-					local hum = char:FindFirstChildOfClass("Humanoid")
-					if hum then 
-						hum.WalkSpeed = TARGET_SPEED 
-						task.delay(0.5, function()
-							if hum then hum.WalkSpeed = TARGET_SPEED end
-						end)
-					end
-				end
+				forceCleanup()
 				return
 			end
 			
@@ -50,26 +83,10 @@ mt.__namecall = newcclosure(function(self, ...)
 			local rootPart = character:FindFirstChild("HumanoidRootPart")
 			if not humanoid or not rootPart then return end
 			
-			local function cleanup()
-				if _G.SpamtonMRConnection then
-					_G.SpamtonMRConnection:Disconnect()
-					_G.SpamtonMRConnection = nil
-				end
-				if character and humanoid then
-					humanoid.WalkSpeed = TARGET_SPEED
-					task.delay(0.5, function()
-						if humanoid then humanoid.WalkSpeed = TARGET_SPEED end
-					end)
-				end
-				if rootPart then
-					rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-				end
-			end
-			
 			-- RUN LOOP
 			_G.SpamtonMRConnection = RunService.RenderStepped:Connect(function()
 				if not character.Parent or not humanoid or humanoid.Health <= 0 then
-					cleanup()
+					forceCleanup()
 					return
 				end
 				
