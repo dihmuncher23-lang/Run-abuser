@@ -134,7 +134,7 @@ button.MouseButton1Click:Connect(function()
 
     isCooldown = true
 
-    -- Fetch character, humanoid, and animator FRESH on click to prevent missing references
+    -- Fetch character, humanoid, and animator FRESH on click
     local char = player.Character
     local humanoid = char and char:FindFirstChildOfClass("Humanoid")
     local animator = humanoid and humanoid:FindFirstChildOfClass("Animator")
@@ -145,7 +145,8 @@ button.MouseButton1Click:Connect(function()
         return
     end
 
-    local defaultWalkSpeed = humanoid.WalkSpeed
+    -- Capture speed right before changing it. If a debuff is active, we track the difference or handle it safely.
+    local preAbilitySpeed = humanoid.WalkSpeed
     humanoid.WalkSpeed = 3
 
     -- Load and play animation dynamically
@@ -154,7 +155,7 @@ button.MouseButton1Click:Connect(function()
     local animTrack = animator:LoadAnimation(animObject)
     animTrack:Play()
 
-    -- Restore walkspeed safely when done or character dies
+    -- Restore walkspeed safely when done or character dies, respecting any external speed changes during the ability
     task.spawn(function()
         local stopped = false
         local conn
@@ -169,7 +170,11 @@ button.MouseButton1Click:Connect(function()
         if conn then conn:Disconnect() end
 
         if humanoid and humanoid.Parent then
-            humanoid.WalkSpeed = defaultWalkSpeed
+            -- If your speed changed *while* the ability was active (e.g., you got hit by another debuff), 
+            -- we keep the lowest/current applied modification rather than blindly forcing the old default back.
+            if humanoid.WalkSpeed == 3 then
+                humanoid.WalkSpeed = preAbilitySpeed
+            end
         end
     end)
 
