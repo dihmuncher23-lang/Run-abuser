@@ -1,0 +1,176 @@
+-- Modern Circular Draggable UI with Dedicated Drag Ring
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+local Event = ReplicatedStorage:FindFirstChild("KrakenArm")
+
+-- Remove existing GUI if already running
+if PlayerGui:FindFirstChild("KrakenAbsoluteGui") then
+    PlayerGui.KrakenAbsoluteGui:Destroy()
+end
+
+-- Create ScreenGui that overlays everything
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "KrakenAbsoluteGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.DisplayOrder = 999999
+ScreenGui.Parent = PlayerGui
+
+-- Main Container Frame
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 90, 0, 90)
+MainFrame.Position = UDim2.new(0.8, -45, 0.5, -45)
+MainFrame.BackgroundTransparency = 1
+MainFrame.Active = true
+MainFrame.Parent = ScreenGui
+
+-- Outer Draggable Ring (Grab anywhere on this glowing border to move it)
+local DragRing = Instance.new("Frame")
+DragRing.Name = "DragRing"
+DragRing.Size = UDim2.new(1, 0, 1, 0)
+DragRing.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+DragRing.BackgroundTransparency = 0.2
+DragRing.BorderSizePixel = 0
+DragRing.Active = true
+DragRing.Parent = MainFrame
+
+local RingCorner = Instance.new("UICorner")
+RingCorner.CornerRadius = UDim.new(1, 0)
+RingCorner.Parent = DragRing
+
+local RingStroke = Instance.new("UIStroke")
+RingStroke.Color = Color3.fromRGB(0, 229, 255)
+RingStroke.Thickness = 3
+RingStroke.Parent = DragRing
+
+-- Inner Action Button (Tap this to fire the Kraken ability)
+local Button = Instance.new("TextButton")
+Button.Name = "KrakenButton"
+Button.Size = UDim2.new(0, 64, 0, 64)
+Button.AnchorPoint = Vector2.new(0.5, 0.5)
+Button.Position = UDim2.new(0.5, 0, 0.5, 0)
+Button.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+Button.TextSize = 12
+Button.Font = Enum.Font.GothamBold
+Button.Text = "KRAKEN"
+Button.Parent = MainFrame
+
+local ButtonCorner = Instance.new("UICorner")
+ButtonCorner.CornerRadius = UDim.new(1, 0)
+ButtonCorner.Parent = Button
+
+local ButtonStroke = Instance.new("UIStroke")
+ButtonStroke.Color = Color3.fromRGB(0, 229, 255)
+ButtonStroke.Thickness = 1.5
+ButtonStroke.Parent = Button
+
+-- Lock Toggle Button (Positioned neatly on top edge)
+local LockButton = Instance.new("TextButton")
+LockButton.Name = "LockButton"
+LockButton.Size = UDim2.new(0, 26, 0, 26)
+LockButton.AnchorPoint = Vector2.new(0.5, 0)
+LockButton.Position = UDim2.new(0.5, 0, 0, -4)
+LockButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+LockButton.TextColor3 = Color3.fromRGB(200, 200, 200)
+LockButton.TextSize = 12
+LockButton.Font = Enum.Font.GothamBold
+LockButton.Text = "🔓"
+LockButton.Parent = MainFrame
+
+local LockCorner = Instance.new("UICorner")
+LockCorner.CornerRadius = UDim.new(1, 0)
+LockCorner.Parent = LockButton
+
+local LockStroke = Instance.new("UIStroke")
+LockStroke.Color = Color3.fromRGB(0, 229, 255)
+LockStroke.Thickness = 1.5
+LockStroke.Parent = LockButton
+
+local isLocked = false
+
+LockButton.MouseButton1Click:Connect(function()
+    isLocked = not isLocked
+    if isLocked then
+        LockButton.Text = "🔒"
+        RingStroke.Color = Color3.fromRGB(255, 50, 50)
+        ButtonStroke.Color = Color3.fromRGB(255, 50, 50)
+        LockStroke.Color = Color3.fromRGB(255, 50, 50)
+        LockButton.BackgroundColor3 = Color3.fromRGB(80, 20, 20)
+    else
+        LockButton.Text = "🔓"
+        RingStroke.Color = Color3.fromRGB(0, 229, 255)
+        ButtonStroke.Color = Color3.fromRGB(0, 229, 255)
+        LockStroke.Color = Color3.fromRGB(0, 229, 255)
+        LockButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    end
+end)
+
+-- Seamless Finger-Dragging via the Outer Ring
+local dragging = false
+local dragInput = nil
+local dragStart = Vector2.new(0, 0)
+local startPos = UDim2.new(0, 0, 0, 0)
+
+DragRing.InputBegan:Connect(function(input)
+    if isLocked then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragInput = input
+        dragStart = input.Position
+        startPos = MainFrame.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input == dragInput and not isLocked then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(
+            startPos.X.Scale, 
+            startPos.X.Offset + delta.X, 
+            startPos.Y.Scale, 
+            startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input == dragInput then
+        dragging = false
+        dragInput = nil
+    end
+end)
+
+-- Ability Trigger Logic (Independent from dragging)
+local cooldown = 5.0 
+local isCooldown = false
+
+Button.MouseButton1Click:Connect(function()
+    if not isCooldown and Event then
+        isCooldown = true
+        Event:FireServer()
+        
+        TweenService:Create(ButtonStroke, TweenInfo.new(0.1), {Transparency = 0}):Play()
+        task.wait(0.1)
+        TweenService:Create(ButtonStroke, TweenInfo.new(0.2), {Transparency = 0.3}):Play()
+        
+        local timeLeft = cooldown
+        while timeLeft > 0 do
+            Button.Text = string.format("%.1fs", timeLeft)
+            ButtonStroke.Color = Color3.fromRGB(255, 100, 50)
+            task.wait(0.1)
+            timeLeft = timeLeft - 0.1
+        end
+        
+        Button.Text = "KRAKEN"
+        ButtonStroke.Color = Color3.fromRGB(0, 229, 255)
+        isCooldown = false
+    end
+end)
